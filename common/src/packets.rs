@@ -1,27 +1,6 @@
 mod packet_flags;
-
-struct Connect {
-    client_id: String,
-    username: String,
-    password: String,
-    connect_flags: ConnectFlags,
-    last_will_message: String,
-    last_will_topic: String,
-    // keep alive?
-}
-
-impl Connect {
-    fn new(client_id: String,
-        username: String,
-        password: String,
-        connect_flags: ConnectFlags,
-        last_will_message: String,
-        last_will_topic: String) -> Connect {
-            Connect {
-                client_id, username, password, last_will_message, last_will_topic
-            }
-        }
-}
+mod parser;
+use connect::{indentify_package};
 
 struct Connack {
     flags: Flags,
@@ -68,5 +47,11 @@ pub enum Packet {
 }
 
 impl Packet {
-    
+    pub fn read_from(stream: &mut dyn Read) -> std::io::Result<Packet> {
+        let mut indetifier_byte = [0u8; 1];
+        stream.read_exact(&mut indetifier_byte)?;
+        let builder = indentify_package(indetifier_byte)?;
+        let packet = builder.build_packet(stream)?;
+        packet
+    }
 }
