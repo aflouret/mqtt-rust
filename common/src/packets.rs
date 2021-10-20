@@ -3,35 +3,27 @@ mod parser;
 use connect::{indentify_package};
 
 struct Connack {
-    flags: Flags,
 }
 
 struct Publish {
-    flags: Flags,
 }
 
 struct Puback {
-    flags: Flags,
 }
 
 struct Subscribe {
-    flags: Flags,
 }
 
 struct Unsubscribe {
-    flags: Flags,
 }
 
 struct Suback {
-    flags: Flags,
 }
 
 struct Unsuback {
-    flags: Flags,
 }
 
 struct Disconnect {
-    flags: Flags,
 }
 
 pub enum Packet {
