@@ -1,4 +1,4 @@
-mod ../common/src/parser; //TODO ver como importar los modulos de common
+// Para usar cualquier funcion/cosa de common, hacemos "common::archivo::algo"
 use std::io::{BufRead, BufReader, Read};
 use std::net::{TcpListener, TcpStream};
 
@@ -16,7 +16,8 @@ fn server_run(address: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+// Leemos el packet desde el TcpStream.
 fn handle_client(stream: &mut dyn Read) -> Result<()> {
-    let packet = Packet::read_from(stream)?;
+    let packet: common::packets::Packet = Packet::read_from(stream)?;
     Ok(())
 }
