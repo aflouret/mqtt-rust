@@ -1,6 +1,6 @@
 use crate::packet_flags::ConnectFlags;
-use parser::indentify_package;
 use std::io::Read;
+use crate::parser::get_remaining_length;
 
 pub struct Connect {
     client_id: String,
@@ -12,7 +12,7 @@ pub struct Connect {
     // keep alive?
 }
 
-pub impl Connect {
+impl Connect {
     pub fn new(client_id: String,
         username: String,
         password: String,
@@ -20,7 +20,7 @@ pub impl Connect {
         last_will_message: String,
         last_will_topic: String) -> Connect {
             Connect {
-                client_id, username, password, last_will_message, last_will_topic
+                client_id, username, password, connect_flags, last_will_message, last_will_topic
             }
         }
 }
@@ -42,19 +42,19 @@ impl ConnectBuilder {
         let empty_flags = ConnectFlags::new(false,false,false,false,false,false);
 
         ConnectBuilder {
-            client_id: "",
-            username: "",
-            password: "",
+            client_id: "".to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
             connect_flags: empty_flags,
-            last_will_message: "",
-            last_will_topic: ""
+            last_will_message: "".to_string(),
+            last_will_topic: "".to_string()
         }    
     }
 
     pub fn build_packet(&self, stream: &mut dyn Read) -> Result<(),String>{
         let mut length_bytes = [0u8; 1]; // TODO!!!!! Hacer que pueda leer hasta 4 bytes, como dice la documentacion
         stream.read_exact(&mut length_bytes)?;
-        let remaining_length = get_remaining_lenth(length_bytes)?;
+        let remaining_length = get_remaining_length(length_bytes)?;
 
         let mut mqtt_bytes = [0u8; 4];
         stream.read_exact(&mut mqtt_bytes)?;

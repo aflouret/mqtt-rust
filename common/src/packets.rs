@@ -1,6 +1,7 @@
-mod packet_flags;
-mod parser;
-use connect::{indentify_package};
+use crate::all_packets::connect::Connect;
+use crate::parser::indentify_package;
+use std::io::Read;
+
 
 struct Connack {
 }
@@ -39,11 +40,11 @@ pub enum Packet {
 }
 
 impl Packet {
-    pub fn read_from(stream: &mut dyn Read) -> std::io::Result<Packet> {
+    pub fn read_from(stream: &mut dyn Read) -> Result<Packet,String> {
         let mut indetifier_byte = [0u8; 1];
         stream.read_exact(&mut indetifier_byte)?;
-        let builder = indentify_package(indetifier_byte)?;
+        let builder = indentify_package(indetifier_byte.0)?;
         let packet = builder.build_packet(stream)?;
-        packet
+        Ok(packet)
     }
 }
