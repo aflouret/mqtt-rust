@@ -1,6 +1,6 @@
 use crate::packet_flags::ConnectFlags;
 use parser::indentify_package;
-use std::{io::Read};
+use std::io::Read;
 
 pub struct Connect {
     client_id: String,

@@ -18,6 +18,6 @@ fn server_run(address: &str) -> std::io::Result<()> {
 
 // Leemos el packet desde el TcpStream.
 fn handle_client(stream: &mut dyn Read) -> Result<()> {
-    let packet: common::packets::Packet = Packet::read_from(stream)?;
+    let packet = Packet::read_from(stream)?;
     Ok(())
 }
