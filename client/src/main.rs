@@ -5,9 +5,12 @@ use std::net::TcpStream;
 
 fn main() -> Result<(), ()> {
 
-    let address = "127.0.0.1:8080"; // Concatenamos la dir. ip + : + puerto
+    let address = "127.0.0.1:8080";
     println!("Conectándome a {:?}", address);
 
+    // Para probar la conexión entre cliente-servidor, hicimos que desde el cliente
+    // se escriba por stdin, se lo mande al server y que este lo imprima. En el futuro
+    // le vamos a estar enviando packets como el Connect. 
     client_run(&address, &mut stdin()).unwrap();
     Ok(())
 }
