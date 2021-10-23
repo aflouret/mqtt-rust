@@ -1,5 +1,5 @@
 use crate::all_packets::connect::Connect;
-use crate::parser::indentify_package;
+use crate::parser::{identify_package};
 use std::io::Read;
 
 
@@ -43,7 +43,7 @@ impl Packet {
     pub fn read_from(stream: &mut dyn Read) -> Result<Packet,String> {
         let mut indetifier_byte = [0u8; 1];
         stream.read_exact(&mut indetifier_byte)?;
-        let builder = indentify_package(indetifier_byte.0)?;
+        let builder = identify_package(indetifier_byte.0)?;
         let packet = builder.build_packet(stream)?;
         Ok(packet)
     }

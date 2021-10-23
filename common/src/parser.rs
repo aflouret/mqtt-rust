@@ -1,6 +1,6 @@
 use crate::all_packets::connect::ConnectBuilder;
 
-pub fn indentify_package(byte: u8) -> Result<ConnectBuilder, String> {
+pub fn identify_package(byte: u8) -> Result<ConnectBuilder, String> {
     match byte {
         0x10 => { Ok(ConnectBuilder::new()) }
         // 0x20 => { ConnackBuilder... } etc etc
@@ -26,3 +26,7 @@ pub fn get_remaining_length(encoded_bytes: Vec<u8>) -> Result<u32,()> {
 }
 
 
+#[test]
+fn identify_connect_package(){
+    assert_eq!(ConnectBuilder::new(), identify_package(0x10));
+}
