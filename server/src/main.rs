@@ -1,5 +1,5 @@
 // Para usar cualquier funcion/cosa de common, hacemos "common::archivo::algo"
-use std::io::{BufRead, BufReader, Read};
+use std::io::{Read};
 use std::net::{TcpListener, TcpStream};
 use common::parser;
 
@@ -19,6 +19,11 @@ fn server_run(address: &str) -> std::io::Result<()> {
 
 // Leemos el packet desde el TcpStream.
 fn handle_client(stream: &mut dyn Read) -> std::io::Result<()> {
-    let packet = parser::read_from_server(stream).unwrap();
+    let mut num_buffer = [0u8; 1];
+    stream.read_exact(&mut num_buffer)?;
+    let num = u8::from_be_bytes(num_buffer);
+    println!("Recibido: {:#0x}", &num);
+
+    //let packet = parser::read_from_server(stream).unwrap();
     Ok(())
 }
