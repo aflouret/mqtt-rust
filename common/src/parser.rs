@@ -2,25 +2,17 @@ use std::io::Read;
 use crate::all_packets::connect::{Connect};
 use crate::packet::{Packet, ReadPacket};
 
-pub fn build_packet(indetifier_byte: u8, stream: &mut dyn Read) -> Result<Packet, String> {
-    match indetifier_byte {
-        0x10 => {  
-            println!("Es un Connect!");
-            Connect::read_from(stream) }
-        // 0x20 => { ConnackBuilder... } etc etc
-
-        _ => {Err("Ningún packet tiene ese código".to_owned())}
-    }
-    
-}
-
-// Cambié de "read_from_server" a "read_packet" porque la vamos a usar tamb desde el cliente
-pub fn read_packet(stream: &mut dyn Read) -> Result<Packet,Box<dyn std::error::Error>> {
+// Devuelve el packet correspondiente a lo que leyó del stream.
+pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
     let mut indetifier_byte = [0u8; 1];
     stream.read_exact(&mut indetifier_byte)?;
-    let packet = build_packet(u8::from_be_bytes(indetifier_byte), stream)?;
-    
-    Ok(packet)
+
+    match indetifier_byte[0] {
+        0x10 => { Ok(Connect::read_from(stream)?) }
+        // 0x20 => { Ok(Connack::read_from(stream)?) }
+        // 0x3_ => { Ok(Publish::read_from(stream)?) }
+        _ => {Err("Ningún packet tiene ese código".into())}
+    }
 }
 
 // Algoritmo para desencodear el número que representa el RemainingLength 
