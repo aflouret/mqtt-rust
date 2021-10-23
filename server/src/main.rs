@@ -9,21 +9,16 @@ fn main() -> Result<(), ()> {
         Ok(())
 }
 
-fn server_run(address: &str) -> std::io::Result<()> {
-    let listener = TcpListener::bind(address).unwrap();
-    let connection = listener.accept().unwrap();
+fn server_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind(address).unwrap(); //Seria mejor usar "?" en vez de unwrap?
+    let connection = listener.accept().unwrap(); // ídem ant
     let mut client_stream : TcpStream = connection.0;
     handle_client(&mut client_stream)?;
     Ok(())
 }
 
 // Leemos el packet desde el TcpStream.
-fn handle_client(stream: &mut dyn Read) -> std::io::Result<()> {
-    let mut num_buffer = [0u8; 1];
-    stream.read_exact(&mut num_buffer)?;
-    let num = u8::from_be_bytes(num_buffer);
-    println!("Recibido: {:#0x}", &num);
-
-    //let packet = parser::read_from_server(stream).unwrap();
+fn handle_client(stream: &mut dyn Read) -> Result<(), Box<dyn std::error::Error>> {
+    let packet = parser::read_packet(stream)?;
     Ok(())
 }
