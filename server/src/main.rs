@@ -1,6 +1,7 @@
 // Para usar cualquier funcion/cosa de common, hacemos "common::archivo::algo"
 use std::io::{BufRead, BufReader, Read};
 use std::net::{TcpListener, TcpStream};
+use common::packets::Packet;
 
 fn main() -> Result<(), ()> {   
         let address = "0.0.0.0:8080".to_owned(); 
@@ -17,7 +18,7 @@ fn server_run(address: &str) -> std::io::Result<()> {
 }
 
 // Leemos el packet desde el TcpStream.
-fn handle_client(stream: &mut dyn Read) -> Result<()> {
+fn handle_client(stream: &mut dyn Read) -> Result<(),()> {
     let packet = Packet::read_from(stream)?;
     Ok(())
 }
