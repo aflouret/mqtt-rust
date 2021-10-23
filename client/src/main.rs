@@ -18,11 +18,13 @@ fn main() -> Result<(), ()> {
 fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
     let reader = BufReader::new(stream);
     let mut socket = TcpStream::connect(address)?;
+    let buf: [u8; 1] = [0x10];
     for line in reader.lines() {
         if let Ok(line) = line {
             println!("Enviando: {:?}", line);
-            socket.write(line.as_bytes())?;
-            socket.write("\n".as_bytes())?;
+/*            socket.write(line.as_bytes())?;
+            socket.write("\n".as_bytes())?;*/
+            socket.write(&buf);
         }
     }
     Ok(())
