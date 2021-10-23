@@ -1,6 +1,4 @@
-use std::io::stdin;
 use std::io::Write;
-use std::io::{BufRead, BufReader, Read};
 use std::net::TcpStream;
 // Para usar cualquier funcion/cosa de common, hacemos "common::archivo::algo"
 fn main() -> Result<(), ()> {
@@ -11,21 +9,15 @@ fn main() -> Result<(), ()> {
     // Para probar la conexión entre cliente-servidor, hicimos que desde el cliente
     // se escriba por stdin, se lo mande al server y que este lo imprima. En el futuro
     // le vamos a estar enviando packets como el Connect. 
-    client_run(&address, &mut stdin()).unwrap();
+    client_run(&address).unwrap();
     Ok(())
 }
 
-fn client_run(address: &str, stream: &mut dyn Read) -> std::io::Result<()> {
-    let reader = BufReader::new(stream);
+fn client_run(address: &str) -> std::io::Result<()> {
     let mut socket = TcpStream::connect(address)?;
-    let buf: [u8; 1] = [0x10];
-    for line in reader.lines() {
-        if let Ok(line) = line {
-            println!("Enviando: {:?}", line);
-/*            socket.write(line.as_bytes())?;
-            socket.write("\n".as_bytes())?;*/
-            socket.write(&buf);
-        }
-    }
+    let num: u8 = 0x10;
+    println!("Enviando: {:0x}", &num);
+    socket.write(&num.to_be_bytes()).expect("No se pudo escribir en el socket");    
+    
     Ok(())
 }
