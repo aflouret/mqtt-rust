@@ -1,5 +1,5 @@
-use std::io::{Read, Write};
 use crate::all_packets::connect::Connect;
+use std::io::{Read, Write};
 
 pub enum Packet {
     Connect(Connect),

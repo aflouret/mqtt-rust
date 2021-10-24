@@ -16,12 +16,12 @@ fn main() -> Result<(), ()> {
     Ok(())
 }
 
-fn client_run(address: &str) -> std::io::Result<()> {
+fn client_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut socket = TcpStream::connect(address)?;
 
     let connect_packet = Connect::new("pepito".to_owned(), "u".to_owned(), "p".to_owned(), "connect_flags".to_owned(), "last_will_message".to_owned(), "last_will_topic".to_owned());
 
-    connect_packet.write_to(&mut socket).expect("No se pudo escribir en el socket");    
+    connect_packet.write_to(&mut socket)?;    
     
     Ok(())
 }

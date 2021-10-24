@@ -1,10 +1,3 @@
+pub struct Connack {}
 
-
-pub struct Connack {
-    
-}
-
-
-impl Connack {
-
-}
+impl Connack {}
