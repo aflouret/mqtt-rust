@@ -1,5 +1,8 @@
 use std::io::Write;
 use std::net::TcpStream;
+use common::all_packets::connect::Connect;
+use common::packet::WritePacket;
+
 // Para usar cualquier funcion/cosa de common, hacemos "common::archivo::algo"
 fn main() -> Result<(), ()> {
 
@@ -15,9 +18,10 @@ fn main() -> Result<(), ()> {
 
 fn client_run(address: &str) -> std::io::Result<()> {
     let mut socket = TcpStream::connect(address)?;
-    let num: u8 = 0x10;
-    println!("Enviando: {:0x}", &num);
-    socket.write(&num.to_be_bytes()).expect("No se pudo escribir en el socket");    
+
+    let connect_packet = Connect::new("pepito".to_owned(), "u".to_owned(), "p".to_owned(), "connect_flags".to_owned(), "last_will_message".to_owned(), "last_will_topic".to_owned());
+
+    connect_packet.write_to(&mut socket).expect("No se pudo escribir en el socket");    
     
     Ok(())
 }
