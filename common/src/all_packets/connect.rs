@@ -38,8 +38,9 @@ impl Connect {
 
     fn get_remaining_length(&self) -> u32 {
         //TODO: obtener el r.l. de esta instancia del packet
-        //10
-        268435455
+        //10 
+        2097151
+        //268435455 // --> está dando error en el decode
     }
 }
 
@@ -91,8 +92,8 @@ impl ReadPacket for Connect {
         verify_protocol_level_byte(&protocol_level_byte)?;
         println!("Protocol level byte leido");
 
-        let mut flags_byte = [0u8; 1];
-        stream.read_exact(&mut flags_byte)?;
+        // let mut flags_byte = [0u8; 1];
+        // stream.read_exact(&mut flags_byte)?;
         //TODO: self.set_flags(flags_byte)?; en adelante
 
         Ok(Packet::Connect(Connect::new(
