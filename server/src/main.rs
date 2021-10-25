@@ -2,6 +2,8 @@
 use std::io::{Read};
 use std::net::{TcpListener, TcpStream};
 use common::parser;
+use common::packet::{Packet, WritePacket};
+use common::all_packets::connack::Connack;
 
 fn main() -> Result<(), ()> {   
         let address = "0.0.0.0:8080".to_owned(); 
@@ -18,7 +20,9 @@ fn server_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // Leemos el packet desde el TcpStream.
-fn handle_client(stream: &mut dyn Read) -> Result<(), Box<dyn std::error::Error>> {
-    let packet = parser::read_packet(stream)?;
+fn handle_client(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    //let packet = parser::read_packet(stream)?;
+    let connack_packet = Connack::new(false, 0);
+    connack_packet.write_to(stream)?;
     Ok(())
 }

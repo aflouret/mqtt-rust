@@ -1,4 +1,5 @@
 use crate::all_packets::connect::Connect;
+use crate::all_packets::connack::Connack;
 use crate::packet::{Packet, ReadPacket};
 use std::io::{Read};
 
@@ -9,7 +10,7 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
 
     match indetifier_byte[0] {
         0x10 => Ok(Connect::read_from(stream)?),
-        // 0x20 => { Ok(Connack::read_from(stream)?) }
+        0x20 => { Ok(Connack::read_from(stream)?) }
         // 0x3_ => { Ok(Publish::read_from(stream)?) }
         _ => Err("Ningún packet tiene ese código".into()),
     }

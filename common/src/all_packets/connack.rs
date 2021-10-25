@@ -2,8 +2,8 @@ use crate::packet::{Packet, ReadPacket, WritePacket};
 use std::io::{Read, Write};
 
 pub struct Connack {
-    session_present: bool,
-    connect_return_code: u8,
+    pub session_present: bool,
+    pub connect_return_code: u8,
 }
 
 impl Connack {
