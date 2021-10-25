@@ -1,3 +1,5 @@
+mod server;
+
 // Para usar cualquier funcion/cosa de common, hacemos "common::archivo::algo"
 use std::net::{TcpListener, TcpStream};
 use common::parser;

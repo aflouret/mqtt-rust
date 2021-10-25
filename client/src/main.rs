@@ -1,3 +1,5 @@
+mod client;
+
 use std::net::TcpStream;
 use common::all_packets::connect::Connect;
 use common::packet::WritePacket;
