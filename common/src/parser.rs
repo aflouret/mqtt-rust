@@ -60,38 +60,37 @@ pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
 // https://doc.rust-lang.org/book/ch11-03-test-organization.html
 #[cfg(test)]
 mod tests {
-    use std::net::{Shutdown, TcpListener, TcpStream};
+    use std::net::{TcpListener, TcpStream};
     use std::io::Write;
     use super::*;
     
+    // Importante: al llamar a get_stream_to_test_decode, usar un puerto distinto para
+    // cada test, ya que cargo corre los tests en paralelo y causa problemas usar el 
+    // mismo puerto. 
     #[test]
     fn decode_remaining_length_1_byte_max_min(){
         let length_to_test_min = 0;
-        let mut stream = get_stream_to_test_decode(length_to_test_min);
+        let mut stream = get_stream_to_test_decode(length_to_test_min, "8080");
         let length_decoded = decode_remaining_length(&mut stream).unwrap();
         assert_eq!(length_decoded, length_to_test_min);
-        stream.shutdown(Shutdown::Both).unwrap(); // Cierro el stream para volver a llamar a la fn
 
         let length_to_test_max = 127;
-        let mut stream = get_stream_to_test_decode(length_to_test_max);
+        let mut stream = get_stream_to_test_decode(length_to_test_max, "8080");
         let length_decoded = decode_remaining_length(&mut stream).unwrap();
         assert_eq!(length_decoded, length_to_test_max);
-        stream.shutdown(Shutdown::Both).unwrap();
     }
 
     #[test]
     fn decode_remaining_length_2_bytes_max_min(){
         let length_to_test_min = 128;
-        let mut stream = get_stream_to_test_decode(length_to_test_min);
+        let mut stream = get_stream_to_test_decode(length_to_test_min, "8081");
         let length_decoded = decode_remaining_length(&mut stream).unwrap();
         assert_eq!(length_decoded, length_to_test_min);
-        stream.shutdown(Shutdown::Both).unwrap(); // Cierro el stream para volver a llamar a la fn
 
         let length_to_test_max = 16383;
-        let mut stream = get_stream_to_test_decode(length_to_test_max);
+        let mut stream = get_stream_to_test_decode(length_to_test_max, "8081");
         let length_decoded = decode_remaining_length(&mut stream).unwrap();
         assert_eq!(length_decoded, length_to_test_max);
-        stream.shutdown(Shutdown::Both).unwrap();
     }
 
     #[test]
@@ -145,10 +144,11 @@ mod tests {
     // Función auxiliar para el testeo, que crea un servidor y cliente en dos threads distintos
     // y devuelve el socket del servidor para que desde el test se lea lo que mandó el cliente: 
     // un remaining length encodeado.
-    fn get_stream_to_test_decode(length_to_test: u32) -> TcpStream {
-        let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+    fn get_stream_to_test_decode(length_to_test: u32, port: &str) -> TcpStream {
+        let port = port.to_owned();
+        let listener = TcpListener::bind("0.0.0.0:".to_owned() + &port).unwrap();
         let join_handle_client = std::thread::spawn(move || {
-            let mut socket = TcpStream::connect("127.0.0.1:8080").unwrap();
+            let mut socket = TcpStream::connect("127.0.0.1:".to_owned() + &port).unwrap();
             let length_encoded = encode_remaining_length(length_to_test);
             for byte in length_encoded {
                 socket.write(&[byte]).unwrap();
