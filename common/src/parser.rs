@@ -75,6 +75,7 @@ mod tests {
         let mut stream = get_stream_to_test_decode(length_to_test_max);
         let length_decoded = decode_remaining_length(&mut stream).unwrap();
         assert_eq!(length_decoded, length_to_test_max);
+        stream.shutdown(Shutdown::Both).unwrap();
     }
 
     #[test]
@@ -89,6 +90,7 @@ mod tests {
         let mut stream = get_stream_to_test_decode(length_to_test_max);
         let length_decoded = decode_remaining_length(&mut stream).unwrap();
         assert_eq!(length_decoded, length_to_test_max);
+        stream.shutdown(Shutdown::Both).unwrap();
     }
 
     #[test]
