@@ -75,3 +75,43 @@ fn verify_remaining_length_byte(byte: &[u8; 1]) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correct_flag_byte_0(){
+        let byte: [u8; 1] = [0x0];
+        let to_test = verify_flags_byte(&byte);
+        assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn correct_flag_byte_1(){
+        let byte: [u8; 1] = [0x1];
+        let to_test = verify_flags_byte(&byte);
+        assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn error_flag_byte(){
+        let byte: [u8; 1] = [0x2];
+        let to_test = verify_flags_byte(&byte);
+        assert_eq!(to_test, Err("Flags invalidos".to_owned()));
+    }
+
+    #[test]
+    fn correct_remaining_length_byte(){
+        let byte: [u8; 1] = [0x2];
+        let to_test = verify_remaining_length_byte(&byte);
+        assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn error_remaining_length_byte(){
+        let byte: [u8; 1] = [0x5];
+        let to_test = verify_remaining_length_byte(&byte);
+        assert_eq!(to_test, Err("Remaining length byte inválido".to_owned()));
+    }
+}

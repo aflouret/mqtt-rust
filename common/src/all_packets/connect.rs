@@ -153,3 +153,37 @@ impl ConnectBuilder {
     }
 
 }*/
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correct_protocol_level_byte(){
+        let byte: [u8; 1] = [0x4];
+        let to_test = verify_protocol_level_byte(&byte);
+        assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn error_protocol_level_byte(){
+        let byte: [u8; 1] = [0x5];
+        let to_test = verify_protocol_level_byte(&byte);
+
+        assert_eq!(to_test, Err("Protocol level byte inválido".to_owned()));
+    }
+
+    #[test]
+    fn correct_mqtt_string_byte(){
+        let bytes: [u8; 6] = [0x00, 0x04, 0x4D, 0x51, 0x54, 0x54];
+        let to_test = verify_mqtt_string_bytes(&bytes);
+        assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn error_mqtt_string_byte(){
+        let bytes: [u8; 6] = [0x00, 0x05, 0x4D, 0x51, 0x54, 0x54];
+        let to_test = verify_mqtt_string_bytes(&bytes);
+        assert_eq!(to_test, Err("No es MQTT".to_owned()));
+    }
+}

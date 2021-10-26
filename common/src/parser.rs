@@ -25,13 +25,13 @@ pub fn decode_remaining_length(stream: &mut dyn Read) -> Result<u32, Box<dyn std
         println!("encoded byte: {:?}", encoded_byte);
         let encoded_byte: u8 = encoded_byte?;
         value += (encoded_byte & 127) as u32 * multiplier;
+        if (encoded_byte & 128) == 0 {
+            break;
+        };
         multiplier *= 128;
         if multiplier > 128 * 128 * 128 {
             return Err("Incorrect length".into());
         }
-        if (encoded_byte & 128) == 0 {
-            break;
-        };
     }
     Ok(value)
 }
@@ -60,13 +60,15 @@ pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
 // https://doc.rust-lang.org/book/ch11-03-test-organization.html
 #[cfg(test)]
 mod tests {
-    use std::net::{TcpListener, TcpStream};
-    use std::io::Write;
+    //use std::net::{TcpListener, TcpStream};
+    //use std::io::Write;
+    use std::io::Cursor;
     use super::*;
     
     // Importante: al llamar a get_stream_to_test_decode, usar un puerto distinto para
     // cada test, ya que cargo corre los tests en paralelo y causa problemas usar el 
     // mismo puerto. 
+    /*
     #[test]
     fn decode_remaining_length_1_byte_max_min(){
         let length_to_test_min = 0;
@@ -92,6 +94,7 @@ mod tests {
         let length_decoded = decode_remaining_length(&mut stream).unwrap();
         assert_eq!(length_decoded, length_to_test_max);
     }
+    */
 
     #[test]
     fn encode_length_1_byte_min() {
@@ -144,6 +147,7 @@ mod tests {
     // Función auxiliar para el testeo, que crea un servidor y cliente en dos threads distintos
     // y devuelve el socket del servidor para que desde el test se lea lo que mandó el cliente: 
     // un remaining length encodeado.
+    /*
     fn get_stream_to_test_decode(length_to_test: u32, port: &str) -> TcpStream {
         let port = port.to_owned();
         let listener = TcpListener::bind("0.0.0.0:".to_owned() + &port).unwrap();
@@ -157,5 +161,70 @@ mod tests {
         join_handle_client.join().unwrap();
         let client_stream = listener.accept().unwrap().0;
         client_stream
+    }
+    */
+
+    #[test]
+    fn decode_length_1_byte_min(){
+        let mut buff = Cursor::new(vec![1]);
+        let to_test = decode_remaining_length(&mut buff).unwrap();
+        assert_eq!(to_test, 1);
+    }
+
+    #[test]
+    fn decode_length_1_byte_max(){
+        let mut buff = Cursor::new(vec![127]);
+        let to_test = decode_remaining_length(&mut buff).unwrap();
+        assert_eq!(to_test, 127);
+    }
+
+    #[test]
+    fn decode_length_2_byte_min(){
+        let mut buff = Cursor::new(vec![128, 1]);
+        let to_test = decode_remaining_length(&mut buff).unwrap();
+        assert_eq!(to_test, 128);
+    }
+
+    #[test]
+    fn decode_length_2_byte_max(){
+        let mut buff = Cursor::new(vec![255, 127]);
+        let to_test = decode_remaining_length(&mut buff).unwrap();
+        assert_eq!(to_test, 16383);
+    }
+
+    #[test]
+    fn decode_length_3_byte_min(){
+        let mut buff = Cursor::new(vec![128, 128, 1]);
+        let to_test = decode_remaining_length(&mut buff).unwrap();
+        assert_eq!(to_test, 16384);
+    }
+
+    #[test]
+    fn decode_length_3_byte_max(){
+        let mut buff = Cursor::new(vec![255, 255, 127]);
+        let to_test = decode_remaining_length(&mut buff).unwrap();
+        assert_eq!(to_test, 2097151);
+    }
+
+    #[test]
+    fn decode_length_4_byte_min(){
+        let mut buff = Cursor::new(vec![128, 128, 128, 1]);
+        let to_test = decode_remaining_length(&mut buff).unwrap();
+        assert_eq!(to_test, 2097152);
+    }
+
+    #[test]
+    fn decode_length_4_byte_max(){
+        let mut buff = Cursor::new(vec![255, 255, 255, 127]);
+        let to_test = decode_remaining_length(&mut buff).unwrap();
+        assert_eq!(to_test, 268435455);
+    }
+
+    #[test]
+    fn error_decode_length(){
+        let mut buff = Cursor::new(vec![255, 255, 255, 255, 127]);
+        let to_test = decode_remaining_length(&mut buff);
+
+        assert_eq!(to_test.is_err(), true);
     }
 }
