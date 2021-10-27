@@ -1,5 +1,4 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use crate::packet_flags::ConnectFlags;
 use crate::parser::decode_remaining_length;
 use crate::parser::encode_remaining_length;
 use std::io::{Read, Write};
@@ -7,24 +6,22 @@ use std::vec;
 
 pub struct Connect {
     client_id: String,
-    username: String,
-    password: String,
-    //connect_flags: ConnectFlags,
-    connect_flags: String,
-    last_will_message: String,
-    last_will_topic: String,
+    username: Option<String>,
+    password: Option<String>,
+    connect_flags: ConnectFlags,
+    last_will_message: Option<String>,
+    last_will_topic: Option<String>,
     // keep alive?
 }
 
 impl Connect {
     pub fn new(
         client_id: String,
-        username: String,
-        password: String,
-        // connect_flags: ConnectFlags,
-        connect_flags: String,
-        last_will_message: String,
-        last_will_topic: String,
+        username: Option<String>,
+        password: Option<String>,
+        connect_flags: ConnectFlags,
+        last_will_message: Option<String>,
+        last_will_topic: Option<String>,
     ) -> Connect {
         Connect {
             client_id,
@@ -38,9 +35,7 @@ impl Connect {
 
     fn get_remaining_length(&self) -> u32 {
         //TODO: obtener el r.l. de esta instancia del packet
-        //10
-        2097151
-        //268435455 // --> está dando error en el decode
+        268435455 
     }
 }
 
@@ -70,52 +65,50 @@ impl WritePacket for Connect {
         stream.write(&[protocol_level])?;
 
         // Escribimos los flags
+        self.connect_flags.write_to(stream)?;
 
+        // TODO: keep alive
+
+        // TODO: payload (username, etc etc de acuerdo al remaining length)
+
+        //TODO: calcular el remaining length
+
+        // TODO: validar las cominaciones de flags...
         Ok(())
     }
 }
 
 impl ReadPacket for Connect {
     fn read_from(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
-        println!("Entro a connect");
-
         let remaining_length = decode_remaining_length(stream)?;
         println!("Remaining length decodificado: {}", remaining_length);
 
         let mut mqtt_string_bytes = [0u8; 6];
         stream.read_exact(&mut mqtt_string_bytes)?;
         verify_mqtt_string_bytes(&mqtt_string_bytes)?;
-        println!("MQTT string bytes leidos");
 
         let mut protocol_level_byte = [0u8; 1];
         stream.read_exact(&mut protocol_level_byte)?;
         verify_protocol_level_byte(&protocol_level_byte)?;
-        println!("Protocol level byte leido");
 
-        // let mut flags_byte = [0u8; 1];
-        // stream.read_exact(&mut flags_byte)?;
-        //TODO: self.set_flags(flags_byte)?; en adelante
+        let connect_flags = ConnectFlags::read_from(stream)?;
 
         Ok(Packet::Connect(Connect::new(
             "123".to_string(),
-            "asd".to_string(),
-            "awd".to_string(),
-            //ConnectFlags::new(false, false, false, false, false, false),
-            "connect_flags".to_string(),
-            "last".to_string(),
-            "sdt".to_string(),
+            Some("asd".to_string()),
+            Some("asd".to_string()),
+            connect_flags,
+            Some("asd".to_string()),
+            Some("asd".to_string()),
         )))
     }
 }
 
 fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
     let mqtt_string_bytes: [u8; 6] = [0x00, 0x04, 0x4D, 0x51, 0x54, 0x54];
-    for (i, byte) in bytes.iter().enumerate() {
-        if *byte != mqtt_string_bytes[i] {
-            return Err("No es MQTT".into());
-        }
+    if mqtt_string_bytes != *bytes {
+        return Err("No es MQTT".into());
     }
-    // if bytes[0] != 0x4d || bytes[1] != 0x51 || bytes[2] != 0x54 || bytes[3] != 0x54
     Ok(())
 }
 
@@ -126,33 +119,98 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
     Ok(())
 }
 
-//-------------------------------------------------------------------------
-/*
-pub struct ConnectBuilder {
-    client_id: String,
-    username: String,
-    password: String,
-    connect_flags: ConnectFlags,
-    last_will_message: String,
-    last_will_topic: String,
-    // keep alive?
+/* ------------------------------------------- */
+pub struct ConnectFlags {
+    username: bool,
+    password: bool,
+    last_will_retain: bool,
+    last_will_qos: bool,
+    last_will_flag: bool,
+    clean_session: bool,
 }
 
-impl ConnectBuilder {
-    pub fn new() -> ConnectBuilder{
-        let empty_flags = ConnectFlags::new(false,false,false,false,false,false);
-
-        ConnectBuilder {
-            client_id: "".to_string(),
-            username: "".to_string(),
-            password: "".to_string(),
-            connect_flags: empty_flags,
-            last_will_message: "".to_string(),
-            last_will_topic: "".to_string()
+impl ConnectFlags {
+    pub fn new(
+        username: bool,
+        password: bool,
+        last_will_retain: bool,
+        last_will_qos: bool,
+        last_will_flag: bool,
+        clean_session: bool,
+    ) -> ConnectFlags {
+        ConnectFlags {
+            username,
+            password,
+            last_will_retain,
+            last_will_qos,
+            last_will_flag,
+            clean_session,
         }
     }
 
-}*/
+    fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
+        let mut result_byte: u8 = 0b0000_0000;
+        if self.username {
+            result_byte |= 0b1000_0000;
+        }
+        if self.password {
+            result_byte |= 0b0100_0000;
+        }
+        if self.last_will_retain {
+            result_byte |= 0b0010_0000;
+        }
+        if self.last_will_qos {
+            result_byte |= 0b0000_1000;
+        }
+        if self.last_will_flag {
+            result_byte |= 0b0000_0100;
+        }
+        if self.last_will_flag {
+            result_byte |= 0b0000_0010;
+        }
+        // The LSB (Reserved) must be 0, so we set it to 0. 
+        // As there is no QoS 2, the 4th bit is also set to 0.
+        stream.write(&[result_byte])?;
+        Ok(())
+    }
+
+    fn read_from(stream: &mut dyn Read) -> Result<ConnectFlags, Box<dyn std::error::Error>> {
+        let mut flags_byte = [0u8; 1];
+        stream.read_exact(&mut flags_byte)?;
+        let flags_byte = flags_byte[0];
+        let mut flags = [false; 8];
+
+        if flags_byte & 0b1000_0000 == 0b1000_0000 {
+            flags[0] = true; // Username flag
+        }
+        if flags_byte & 0b0100_0000 == 0b0100_0000 {
+            flags[1] = true; // Password flag
+        }
+        if flags_byte & 0b0010_0000 == 0b0010_0000 {
+            flags[2] = true; // Last will retain flag
+        }
+        if flags_byte & 0b0001_0000 == 0b0001_0000 {
+            return Err("4th msb of Connect flags is 1, and should be 0 (Quality of Service can be 1 o 0 only)".into())
+        }
+        if flags_byte & 0b0000_1000 == 0b0000_1000 {
+            flags[4] = true; // Last will qos flag
+        }
+        if flags_byte & 0b0000_0100 == 0b0000_0100 {
+            flags[5] = true; // Last will flag
+        }
+        if flags_byte & 0b0000_0010 == 0b0000_0010 {
+            flags[6] = true; // Clean session flag
+        }
+        if flags_byte & 0b0000_0001 == 0b0000_0001 {
+            return Err("Connect flags: Reserved bit should be 0".into())
+        }
+
+        Ok(ConnectFlags::new(flags[0], flags[1], flags[2], flags[4], flags[5], flags[6]))
+    }
+}
+
+
+/* ------------------------------------------- */
 
 #[cfg(test)]
 mod tests {

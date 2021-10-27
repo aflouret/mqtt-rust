@@ -1,6 +1,7 @@
 mod client;
 
 use common::all_packets::connect::Connect;
+use common::all_packets::connect::ConnectFlags;
 use common::packet::Packet;
 use common::packet::WritePacket;
 use common::parser;
@@ -19,11 +20,11 @@ fn client_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     let connect_packet = Connect::new(
         "pepito".to_owned(),
-        "u".to_owned(),
-        "p".to_owned(),
-        "connect_flags".to_owned(),
-        "last_will_message".to_owned(),
-        "last_will_topic".to_owned(),
+        Some("u".to_owned()),
+        Some("u".to_owned()),
+        ConnectFlags::new(false, false, false, false, false, false),
+        Some("u".to_owned()),
+        Some("u".to_owned()),
     );
     connect_packet.write_to(&mut socket)?;
     println!("Se envió el connect packet");
