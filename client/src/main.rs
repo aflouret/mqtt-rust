@@ -6,12 +6,11 @@ use common::packet::WritePacket;
 use common::parser;
 use std::net::TcpStream;
 
-// Para usar cualquier funcion/cosa de common, hacemos "common::archivo::algo"
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address = "127.0.0.1:8080";
     println!("Conectándome a {:?}", address);
 
-    client_run(&address)?; // misma duda de cómo hacer el main que en server
+    client_run(&address)?;
     Ok(())
 }
 

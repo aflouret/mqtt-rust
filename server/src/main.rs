@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn server_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind(address)?;
-    let connection = listener.accept()?; // ídem ant
+    let connection = listener.accept()?;
     let mut client_stream: TcpStream = connection.0;
     handle_client(&mut client_stream)?;
     Ok(())
