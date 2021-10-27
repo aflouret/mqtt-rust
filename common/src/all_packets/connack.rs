@@ -28,7 +28,11 @@ impl WritePacket for Connack {
 
         // VARIABLE HEADER
         // Escribimos el session present flag
-        let session_present_flag = if self.session_present == true { 0x1_u8 } else { 0x0_u8 };
+        let session_present_flag = if self.session_present == true {
+            0x1_u8
+        } else {
+            0x0_u8
+        };
         stream.write(&[session_present_flag])?;
 
         // Escribimos el connect return code
@@ -50,7 +54,11 @@ impl ReadPacket for Connack {
         let mut flags_byte = [0u8; 1];
         stream.read_exact(&mut flags_byte)?;
         verify_flags_byte(&flags_byte)?;
-        let session_present = if flags_byte[0] & 0x1 == 1 { true } else { false };
+        let session_present = if flags_byte[0] & 0x1 == 1 {
+            true
+        } else {
+            false
+        };
         println!("Session present leido: {}", session_present);
 
         let mut connect_return_byte = [0u8; 1];
@@ -58,7 +66,10 @@ impl ReadPacket for Connack {
         let connect_return_code = connect_return_byte[0];
         println!("Connect return code leido: {}", connect_return_code);
 
-        Ok(Packet::Connack(Connack{ session_present, connect_return_code }))
+        Ok(Packet::Connack(Connack {
+            session_present,
+            connect_return_code,
+        }))
     }
 }
 
@@ -81,35 +92,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn correct_flag_byte_0(){
+    fn correct_flag_byte_0() {
         let byte: [u8; 1] = [0x0];
         let to_test = verify_flags_byte(&byte);
         assert_eq!(to_test, Ok(()));
     }
 
     #[test]
-    fn correct_flag_byte_1(){
+    fn correct_flag_byte_1() {
         let byte: [u8; 1] = [0x1];
         let to_test = verify_flags_byte(&byte);
         assert_eq!(to_test, Ok(()));
     }
 
     #[test]
-    fn error_flag_byte(){
+    fn error_flag_byte() {
         let byte: [u8; 1] = [0x2];
         let to_test = verify_flags_byte(&byte);
         assert_eq!(to_test, Err("Flags invalidos".to_owned()));
     }
 
     #[test]
-    fn correct_remaining_length_byte(){
+    fn correct_remaining_length_byte() {
         let byte: [u8; 1] = [0x2];
         let to_test = verify_remaining_length_byte(&byte);
         assert_eq!(to_test, Ok(()));
     }
 
     #[test]
-    fn error_remaining_length_byte(){
+    fn error_remaining_length_byte() {
         let byte: [u8; 1] = [0x5];
         let to_test = verify_remaining_length_byte(&byte);
         assert_eq!(to_test, Err("Remaining length byte inválido".to_owned()));

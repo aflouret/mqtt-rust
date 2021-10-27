@@ -1,7 +1,7 @@
-use crate::all_packets::connect::Connect;
 use crate::all_packets::connack::Connack;
+use crate::all_packets::connect::Connect;
 use crate::packet::{Packet, ReadPacket};
-use std::io::{Read};
+use std::io::Read;
 
 // Devuelve el packet correspondiente a lo que leyó del stream.
 pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
@@ -10,7 +10,7 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
 
     match indetifier_byte[0] {
         0x10 => Ok(Connect::read_from(stream)?),
-        0x20 => { Ok(Connack::read_from(stream)?) }
+        0x20 => Ok(Connack::read_from(stream)?),
         // 0x3_ => { Ok(Publish::read_from(stream)?) }
         _ => Err("Ningún packet tiene ese código".into()),
     }
@@ -62,12 +62,12 @@ pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
 mod tests {
     //use std::net::{TcpListener, TcpStream};
     //use std::io::Write;
-    use std::io::Cursor;
     use super::*;
-    
+    use std::io::Cursor;
+
     // Importante: al llamar a get_stream_to_test_decode, usar un puerto distinto para
-    // cada test, ya que cargo corre los tests en paralelo y causa problemas usar el 
-    // mismo puerto. 
+    // cada test, ya que cargo corre los tests en paralelo y causa problemas usar el
+    // mismo puerto.
     /*
     #[test]
     fn decode_remaining_length_1_byte_max_min(){
@@ -145,7 +145,7 @@ mod tests {
     }
 
     // Función auxiliar para el testeo, que crea un servidor y cliente en dos threads distintos
-    // y devuelve el socket del servidor para que desde el test se lea lo que mandó el cliente: 
+    // y devuelve el socket del servidor para que desde el test se lea lo que mandó el cliente:
     // un remaining length encodeado.
     /*
     fn get_stream_to_test_decode(length_to_test: u32, port: &str) -> TcpStream {
@@ -165,63 +165,63 @@ mod tests {
     */
 
     #[test]
-    fn decode_length_1_byte_min(){
+    fn decode_length_1_byte_min() {
         let mut buff = Cursor::new(vec![1]);
         let to_test = decode_remaining_length(&mut buff).unwrap();
         assert_eq!(to_test, 1);
     }
 
     #[test]
-    fn decode_length_1_byte_max(){
+    fn decode_length_1_byte_max() {
         let mut buff = Cursor::new(vec![127]);
         let to_test = decode_remaining_length(&mut buff).unwrap();
         assert_eq!(to_test, 127);
     }
 
     #[test]
-    fn decode_length_2_byte_min(){
+    fn decode_length_2_byte_min() {
         let mut buff = Cursor::new(vec![128, 1]);
         let to_test = decode_remaining_length(&mut buff).unwrap();
         assert_eq!(to_test, 128);
     }
 
     #[test]
-    fn decode_length_2_byte_max(){
+    fn decode_length_2_byte_max() {
         let mut buff = Cursor::new(vec![255, 127]);
         let to_test = decode_remaining_length(&mut buff).unwrap();
         assert_eq!(to_test, 16383);
     }
 
     #[test]
-    fn decode_length_3_byte_min(){
+    fn decode_length_3_byte_min() {
         let mut buff = Cursor::new(vec![128, 128, 1]);
         let to_test = decode_remaining_length(&mut buff).unwrap();
         assert_eq!(to_test, 16384);
     }
 
     #[test]
-    fn decode_length_3_byte_max(){
+    fn decode_length_3_byte_max() {
         let mut buff = Cursor::new(vec![255, 255, 127]);
         let to_test = decode_remaining_length(&mut buff).unwrap();
         assert_eq!(to_test, 2097151);
     }
 
     #[test]
-    fn decode_length_4_byte_min(){
+    fn decode_length_4_byte_min() {
         let mut buff = Cursor::new(vec![128, 128, 128, 1]);
         let to_test = decode_remaining_length(&mut buff).unwrap();
         assert_eq!(to_test, 2097152);
     }
 
     #[test]
-    fn decode_length_4_byte_max(){
+    fn decode_length_4_byte_max() {
         let mut buff = Cursor::new(vec![255, 255, 255, 127]);
         let to_test = decode_remaining_length(&mut buff).unwrap();
         assert_eq!(to_test, 268435455);
     }
 
     #[test]
-    fn error_decode_length(){
+    fn error_decode_length() {
         let mut buff = Cursor::new(vec![255, 255, 255, 255, 127]);
         let to_test = decode_remaining_length(&mut buff);
 
