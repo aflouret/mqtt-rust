@@ -56,6 +56,38 @@ pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
     vec
 }
 
+pub fn encode_utf8(string: String) -> Result<Vec<u8>, String>{
+    let mut vec: Vec<u8> = Vec::new();
+
+    let string_bytes = string.as_bytes();
+    let len_string_bytes = string_bytes.len();
+
+    if len_string_bytes > 65535 {
+        return Err("Incorrect length".into());
+    }
+    
+    let length = len_string_bytes.to_be_bytes();
+    vec.push(length[6]);
+    vec.push(length[7]);
+    for byte in string_bytes {
+        vec.push(*byte);
+    }
+
+    Ok(vec)
+}
+
+pub fn decode_utf8(stream: &mut dyn Read) -> Result<String, std::io::Error>{
+    let mut bytes = [0u8; 2];
+    stream.read_exact(&mut bytes)?;
+    let number = ((bytes[0] as u16) << 8) | bytes[1] as u16;
+
+    let mut bytes_2 = vec![0; number as usize];
+    stream.read_exact(&mut bytes_2)?;
+    let payload = String::from_utf8(bytes_2).unwrap();
+
+    Ok(payload)
+} 
+
 /* ----------------------------- Unit tests -----------------------------*/
 #[cfg(test)]
 mod tests {
@@ -172,5 +204,32 @@ mod tests {
         let to_test = decode_remaining_length(&mut buff);
 
         assert_eq!(to_test.is_err(), true);
+    }
+
+    #[test]
+    fn encode_utf8_len_1_byte() {
+        let string = String::from("test");
+        let to_test = encode_utf8(string).unwrap();
+
+        assert_eq!(to_test, vec![0, 4, 116, 101, 115, 116]);
+    }
+
+    #[test]
+    fn decode_utf8_len_1_byte() {
+        let mut buff = Cursor::new(vec![0, 4, 116, 101, 115, 116]);
+        let to_test = decode_utf8(&mut buff).unwrap();
+
+        assert_eq!(to_test, String::from("test"));
+    }
+
+
+    #[test]
+    fn encode_and_decode_utf8() {
+        let string = String::from("mqtt");
+        let encode = encode_utf8(string).unwrap();
+        let mut buff = Cursor::new(encode);
+        let to_test = decode_utf8(&mut buff).unwrap();
+
+        assert_eq!(to_test, String::from("mqtt"));
     }
 }
