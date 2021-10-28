@@ -2,6 +2,7 @@ mod client;
 
 use common::all_packets::connect::Connect;
 use common::all_packets::connect::ConnectFlags;
+use common::all_packets::connect::ConnectPayload;
 use common::packet::Packet;
 use common::packet::WritePacket;
 use common::parser;
@@ -18,6 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn client_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut socket = TcpStream::connect(address)?;
 
+    /*
     let connect_packet = Connect::new(
         "pepito".to_owned(),
         Some("u".to_owned()),
@@ -26,6 +28,13 @@ fn client_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
         Some("u".to_owned()),
         Some("u".to_owned()),
     );
+    */
+
+    let connect_packet = Connect::new(
+        ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned())),
+        ConnectFlags::new(false, false, false, false, false, false),
+    );
+
     connect_packet.write_to(&mut socket)?;
     println!("Se envió el connect packet");
 

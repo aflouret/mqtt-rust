@@ -215,6 +215,14 @@ mod tests {
     }
 
     #[test]
+    fn encode_utf8_len_0() {
+        let string = String::from("");
+        let to_test = encode_utf8(string).unwrap();
+
+        assert_eq!(to_test, vec![0, 0]);
+    }
+
+    #[test]
     fn decode_utf8_len_1_byte() {
         let mut buff = Cursor::new(vec![0, 4, 116, 101, 115, 116]);
         let to_test = decode_utf8(&mut buff).unwrap();
@@ -222,6 +230,13 @@ mod tests {
         assert_eq!(to_test, String::from("test"));
     }
 
+    #[test]
+    fn decode_utf8_len_0() {
+        let mut buff = Cursor::new(vec![0, 0]);
+        let to_test = decode_utf8(&mut buff).unwrap();
+
+        assert_eq!(to_test, String::from(""));
+    }
 
     #[test]
     fn encode_and_decode_utf8() {

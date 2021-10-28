@@ -1,9 +1,11 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
 use crate::parser::decode_remaining_length;
 use crate::parser::encode_remaining_length;
+use crate::parser::decode_utf8;
 use std::io::{Read, Write};
-use std::vec;
+use std::io::Cursor;
 
+/*
 pub struct Connect {
     client_id: String,
     username: Option<String>,
@@ -13,8 +15,26 @@ pub struct Connect {
     last_will_topic: Option<String>,
     // keep alive?
 }
+*/
+
+pub struct Connect {
+    connect_payload: ConnectPayload,
+    connect_flags: ConnectFlags,
+    // keep alive?
+}
 
 impl Connect {
+    pub fn new(
+        connect_payload: ConnectPayload,
+        connect_flags: ConnectFlags,
+    ) -> Connect {
+        Connect {
+            connect_payload,
+            connect_flags,
+        }
+    }
+
+    /*
     pub fn new(
         client_id: String,
         username: Option<String>,
@@ -32,6 +52,7 @@ impl Connect {
             last_will_topic,
         }
     }
+    */
 
     fn get_remaining_length(&self) -> u32 {
         //TODO: obtener el r.l. de esta instancia del packet
@@ -81,18 +102,39 @@ impl WritePacket for Connect {
 impl ReadPacket for Connect {
     fn read_from(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
         let remaining_length = decode_remaining_length(stream)?;
-        println!("Remaining length decodificado: {}", remaining_length);
+        //println!("Remaining length decodificado: {}", remaining_length);
 
+        //nuevo
+        let mut remaining = vec![0u8; remaining_length as usize];
+        stream.read_exact(&mut remaining)?;
+        let mut remaining_bytes = Cursor::new(remaining);
+        //fin de nuevo
+
+        /*
         let mut mqtt_string_bytes = [0u8; 6];
         stream.read_exact(&mut mqtt_string_bytes)?;
         verify_mqtt_string_bytes(&mqtt_string_bytes)?;
+        */
+        let mut mqtt_string_bytes = [0u8; 6];
+        remaining_bytes.read_exact(&mut mqtt_string_bytes)?;
+        verify_mqtt_string_bytes(&mqtt_string_bytes)?;
 
+        /*
         let mut protocol_level_byte = [0u8; 1];
         stream.read_exact(&mut protocol_level_byte)?;
         verify_protocol_level_byte(&protocol_level_byte)?;
+        */
+        let mut protocol_level_byte = [0u8; 1];
+        remaining_bytes.read_exact(&mut protocol_level_byte)?;
+        verify_protocol_level_byte(&protocol_level_byte)?;
 
-        let connect_flags = ConnectFlags::read_from(stream)?;
+        //let connect_flags = ConnectFlags::read_from(stream)?;
+        let connect_flags = ConnectFlags::read_from(&mut remaining_bytes)?;
 
+        //Payload: order Client Identifier, Will Topic, Will Message, User Name, Password
+        let payload = ConnectPayload::read_from(&mut remaining_bytes, &connect_flags)?;
+
+        /*
         Ok(Packet::Connect(Connect::new(
             "123".to_string(),
             Some("asd".to_string()),
@@ -101,6 +143,8 @@ impl ReadPacket for Connect {
             Some("asd".to_string()),
             Some("asd".to_string()),
         )))
+        */
+        Ok(Packet::Connect(Connect::new(payload, connect_flags)))
     }
 }
 
@@ -209,7 +253,51 @@ impl ConnectFlags {
     }
 }
 
+pub struct ConnectPayload {
+    client_id: String,
+    username: Option<String>,
+    password: Option<String>,
+    last_will_topic: Option<String>,
+    last_will_message: Option<String>,
+}
 
+impl ConnectPayload {
+    pub fn new(
+        client_id: String,
+        username: Option<String>,
+        password: Option<String>,
+        last_will_topic: Option<String>,
+        last_will_message: Option<String>,
+    ) -> ConnectPayload {
+        ConnectPayload {
+            client_id,
+            username,
+            password,
+            last_will_topic,
+            last_will_message,
+        }
+    }
+
+    fn read_from(stream: &mut dyn Read, flags: &ConnectFlags) -> Result<ConnectPayload, Box<dyn std::error::Error>> {
+        let client_id = decode_utf8(stream)?;
+
+        let mut last_will_topic = None;
+        let mut last_will_message = None;
+        if flags.last_will_flag == true {
+            last_will_topic = Some(decode_utf8(stream)?);
+            last_will_message = Some(decode_utf8(stream)?);
+        }
+
+        let mut username = None;
+        let mut password = None;
+        if flags.username == true {
+            username = Some(decode_utf8(stream)?);
+            password = Some(decode_utf8(stream)?);
+        }
+
+        Ok(ConnectPayload::new(client_id, last_will_topic, last_will_message, username, password))
+    }
+}
 /* ------------------------------------------- */
 
 #[cfg(test)]
