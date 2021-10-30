@@ -38,7 +38,7 @@ pub fn decode_remaining_length(stream: &mut dyn Read) -> Result<u32, Box<dyn std
 
 // Algoritmo para codificar el Remaining Length. Devuelve un vector que puede ser de 1, 2, 3 ó 4
 // elementos u8
-pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
+pub fn encode_remaining_length(packet_length: usize) -> Vec<u8> {
     let mut vec: Vec<u8> = Vec::new();
     let mut encoded_byte;
     let mut x = packet_length;
@@ -56,7 +56,7 @@ pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
     vec
 }
 
-pub fn encode_utf8(string: String) -> Result<Vec<u8>, String>{
+pub fn encode_utf8(string: &String) -> Result<Vec<u8>, String>{
     let mut vec: Vec<u8> = Vec::new();
 
     let string_bytes = string.as_bytes();
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn encode_utf8_len_1_byte() {
         let string = String::from("test");
-        let to_test = encode_utf8(string).unwrap();
+        let to_test = encode_utf8(&string).unwrap();
 
         assert_eq!(to_test, vec![0, 4, 116, 101, 115, 116]);
     }
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn encode_utf8_len_0() {
         let string = String::from("");
-        let to_test = encode_utf8(string).unwrap();
+        let to_test = encode_utf8(&string).unwrap();
 
         assert_eq!(to_test, vec![0, 0]);
     }
@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn encode_and_decode_utf8() {
         let string = String::from("mqtt");
-        let encode = encode_utf8(string).unwrap();
+        let encode = encode_utf8(&string).unwrap();
         let mut buff = Cursor::new(encode);
         let to_test = decode_utf8(&mut buff).unwrap();
 
