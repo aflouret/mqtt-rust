@@ -49,8 +49,8 @@ impl WritePacket for Connect {
         // VARIABLE HEADER
         // Escribimos los bytes 1-6 correspondientes a la string "MQTT"
         let mqtt_string_bytes: [u8; 6] = [0x00, 0x04, 0x4D, 0x51, 0x54, 0x54];
-        for byte in mqtt_string_bytes {
-            stream.write(&[byte])?;
+        for byte in &mqtt_string_bytes {
+            stream.write(&[*byte])?;
         }
 
         // Escribimos el protocol level 4
