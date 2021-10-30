@@ -7,6 +7,7 @@ use crate::parser::encode_utf8;
 use std::io::{Read, Write};
 use std::io::Cursor;
 
+#[derive(Debug)]
 pub struct Connect {
     connect_payload: ConnectPayload,
     connect_flags: ConnectFlags,
@@ -41,6 +42,7 @@ impl WritePacket for Connect {
         let remaining_length = self.get_remaining_length();
         let remaining_length_encoded = encode_remaining_length(remaining_length);
         for byte in remaining_length_encoded {
+
             stream.write(&[byte])?;
         }
 
@@ -101,6 +103,7 @@ fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
     if mqtt_string_bytes != *bytes {
         return Err("No es MQTT".into());
     }
+
     Ok(())
 }
 
@@ -113,13 +116,13 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
 
 fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
     if flags.last_will_flag == false && (flags.last_will_retain == true || flags.last_will_qos == true) {
-        return Err("Flags invalidos".into());
+        return Err("Last will flags invalidos".into());
     } 
     if flags.last_will_qos == false && flags.last_will_flag == true {
-        return Err("Flags invalidos".into());
+        return Err("Last will flags invalidos".into());
     }
     if flags.username == false && flags.password == true {
-        return Err("Flags invalidos".into());
+        return Err("Username y password flags invalidos".into());
     }
 
     Ok(())
@@ -141,6 +144,8 @@ fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), 
 }
 
 /* ------------------------------------------- */
+#[derive(PartialEq)]
+#[derive(Debug)]
 pub struct ConnectFlags {
     username: bool,
     password: bool,
@@ -231,7 +236,8 @@ impl ConnectFlags {
 
 
 }
-
+#[derive(PartialEq)]
+#[derive(Debug)]
 pub struct ConnectPayload {
     client_id: String,
     username: Option<String>,
@@ -353,5 +359,74 @@ mod tests {
         let bytes: [u8; 6] = [0x00, 0x05, 0x4D, 0x51, 0x54, 0x54];
         let to_test = verify_mqtt_string_bytes(&bytes);
         assert_eq!(to_test, Err("No es MQTT".to_owned()));
+    }
+
+    #[test]
+    fn correct_connect_flags() {
+        let flags = ConnectFlags::new(true, true, true, true, true, true);
+        let to_test = verify_connect_flags(&flags);
+        assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn error_username_password_flags() {
+        let flags = ConnectFlags::new(false, true, true, true, true, true);
+        let to_test = verify_connect_flags(&flags);
+        assert_eq!(to_test, Err("Username y password flags invalidos".into()));
+    }
+
+    #[test]
+    fn error_last_will_flags() {
+        let flags = ConnectFlags::new(true, true, true, true, false, true);
+        let to_test = verify_connect_flags(&flags);
+        assert_eq!(to_test, Err("Last will flags invalidos".into()));
+    }
+
+    #[test]
+    fn correct_payload() {
+        let flags = ConnectFlags::new(true, true, true, true, true, true);
+        let payload = ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()));
+
+        let to_test = verify_payload(&flags, &payload);
+        assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn error_payload() {
+        let flags = ConnectFlags::new(true, true, true, true, true, true);
+        let payload = ConnectPayload::new("u".to_owned(), None, Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()));
+
+        let to_test = verify_payload(&flags, &payload);
+        assert_eq!(to_test, Err("Payload invalido".into()));
+    }
+    #[test]
+    fn correct_packet() {
+        let connect_packet = Connect::new(
+            ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned())),
+            ConnectFlags::new(true, true, true, true, true, true),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        connect_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Connect::read_from(&mut buff).unwrap();
+        if let Packet::Connect(to_test) = to_test {
+            assert!(to_test.connect_flags == connect_packet.connect_flags && 
+            to_test.connect_payload == connect_packet.connect_payload)
+        }
+    }
+
+    #[test]
+    fn error_packet() {
+        let connect_packet = Connect::new(
+            ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned())),
+            ConnectFlags::new(false, true, true, true, true, true),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        connect_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Connect::read_from(&mut buff);
+        assert!(to_test.is_err());
     }
 }
