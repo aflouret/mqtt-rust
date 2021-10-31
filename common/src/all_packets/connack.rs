@@ -66,6 +66,7 @@ impl ReadPacket for Connack {
         let connect_return_code = connect_return_byte[0];
         println!("Connect return code leido: {}", connect_return_code);
 
+        verify_packet(session_present, connect_return_code)?;
         Ok(Packet::Connack(Connack {
             session_present,
             connect_return_code,
@@ -87,8 +88,18 @@ fn verify_remaining_length_byte(byte: &[u8; 1]) -> Result<(), String> {
     Ok(())
 }
 
+fn verify_packet(session_present_flag: bool, connect_return_code: u8) -> Result<(), String> {
+    if connect_return_code != 0 && session_present_flag == true {
+        return Err("Session present debe valer 0".into())
+    }
+    Ok(())
+}
+
+
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use super::*;
 
     #[test]
@@ -124,5 +135,30 @@ mod tests {
         let byte: [u8; 1] = [0x5];
         let to_test = verify_remaining_length_byte(&byte);
         assert_eq!(to_test, Err("Remaining length byte inválido".to_owned()));
+    }
+
+    #[test]
+    fn correct_packet() {
+        let connack_packet = Connack::new(true, 0);
+
+        let mut buff = Cursor::new(Vec::new());
+        connack_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Connack::read_from(&mut buff).unwrap();
+        if let Packet::Connack(to_test) = to_test {
+            assert_eq!(to_test.session_present, connack_packet.session_present);
+            assert_eq!(to_test.connect_return_code, connack_packet.connect_return_code)
+        }
+    }
+
+    #[test]
+    fn error_packet() {
+        let connack_packet = Connack::new(true, 1);
+
+        let mut buff = Cursor::new(Vec::new());
+        connack_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Connack::read_from(&mut buff);
+        assert!(to_test.is_err());
     }
 }
