@@ -11,18 +11,20 @@ use std::io::Cursor;
 pub struct Connect {
     connect_payload: ConnectPayload,
     connect_flags: ConnectFlags,
-    // keep alive?
+    keep_alive_seconds: u16,
 }
 
 impl Connect {
     pub fn new(
         connect_payload: ConnectPayload,
         connect_flags: ConnectFlags,
+        keep_alive_seconds: u16,
     ) -> Connect {
 
         Connect {
             connect_payload,
             connect_flags,
+            keep_alive_seconds
         }
     }
 
@@ -60,7 +62,7 @@ impl WritePacket for Connect {
         // Escribimos los flags
         self.connect_flags.write_to(stream)?;
 
-        let keep_alive_bytes = [0_u8, 0];
+        let keep_alive_bytes = self.keep_alive_seconds.to_be_bytes();
         stream.write(&keep_alive_bytes)?;
 
         self.connect_payload.write_to(stream)?;
@@ -89,12 +91,13 @@ impl ReadPacket for Connect {
         
         let mut keep_alive_bytes = [0u8; 2];
         remaining_bytes.read_exact(&mut keep_alive_bytes)?;
+        let keep_alive_seconds = u16::from_be_bytes(keep_alive_bytes);
 
         //Payload: order Client Identifier, Will Topic, Will Message, User Name, Password
         let payload = ConnectPayload::read_from(&mut remaining_bytes, &connect_flags)?;
         verify_payload(&connect_flags, &payload)?;
         
-        Ok(Packet::Connect(Connect::new(payload, connect_flags)))
+        Ok(Packet::Connect(Connect::new(payload, connect_flags, keep_alive_seconds)))
     }
 }
 
@@ -404,6 +407,7 @@ mod tests {
         let connect_packet = Connect::new(
             ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned())),
             ConnectFlags::new(true, true, true, true, true, true),
+            60
         );
 
         let mut buff = Cursor::new(Vec::new());
@@ -412,7 +416,8 @@ mod tests {
         let to_test = Connect::read_from(&mut buff).unwrap();
         if let Packet::Connect(to_test) = to_test {
             assert!(to_test.connect_flags == connect_packet.connect_flags && 
-            to_test.connect_payload == connect_packet.connect_payload)
+            to_test.connect_payload == connect_packet.connect_payload &&
+            to_test.keep_alive_seconds == 60)
         }
     }
 
@@ -421,6 +426,7 @@ mod tests {
         let connect_packet = Connect::new(
             ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned())),
             ConnectFlags::new(false, true, true, true, true, true),
+            60
         );
 
         let mut buff = Cursor::new(Vec::new());
