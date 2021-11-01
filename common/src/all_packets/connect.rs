@@ -1,11 +1,11 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
 use crate::parser::decode_remaining_length;
-use crate::parser::encode_remaining_length;
 use crate::parser::decode_utf8;
+use crate::parser::encode_remaining_length;
 use crate::parser::encode_utf8;
 
-use std::io::{Read, Write};
 use std::io::Cursor;
+use std::io::{Read, Write};
 
 #[derive(Debug)]
 pub struct Connect {
@@ -20,11 +20,10 @@ impl Connect {
         connect_flags: ConnectFlags,
         keep_alive_seconds: u16,
     ) -> Connect {
-
         Connect {
             connect_payload,
             connect_flags,
-            keep_alive_seconds
+            keep_alive_seconds,
         }
     }
 
@@ -44,7 +43,6 @@ impl WritePacket for Connect {
         let remaining_length = self.get_remaining_length();
         let remaining_length_encoded = encode_remaining_length(remaining_length);
         for byte in remaining_length_encoded {
-
             stream.write(&[byte])?;
         }
 
@@ -88,7 +86,7 @@ impl ReadPacket for Connect {
 
         let connect_flags = ConnectFlags::read_from(&mut remaining_bytes)?;
         verify_connect_flags(&connect_flags)?;
-        
+
         let mut keep_alive_bytes = [0u8; 2];
         remaining_bytes.read_exact(&mut keep_alive_bytes)?;
         let keep_alive_seconds = u16::from_be_bytes(keep_alive_bytes);
@@ -96,8 +94,12 @@ impl ReadPacket for Connect {
         //Payload: order Client Identifier, Will Topic, Will Message, User Name, Password
         let payload = ConnectPayload::read_from(&mut remaining_bytes, &connect_flags)?;
         verify_payload(&connect_flags, &payload)?;
-        
-        Ok(Packet::Connect(Connect::new(payload, connect_flags, keep_alive_seconds)))
+
+        Ok(Packet::Connect(Connect::new(
+            payload,
+            connect_flags,
+            keep_alive_seconds,
+        )))
     }
 }
 
@@ -118,9 +120,11 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
 }
 
 fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
-    if flags.last_will_flag == false && (flags.last_will_retain == true || flags.last_will_qos == true) {
+    if flags.last_will_flag == false
+        && (flags.last_will_retain == true || flags.last_will_qos == true)
+    {
         return Err("Last will flags invalidos".into());
-    } 
+    }
     if flags.last_will_qos == false && flags.last_will_flag == true {
         return Err("Last will flags invalidos".into());
     }
@@ -132,14 +136,15 @@ fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
 }
 
 fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), String> {
-    if (payload.username.is_some() && flags.username == false) ||
-    (payload.username.is_none() && flags.username == true) ||
-    (payload.password.is_some() && flags.password == false) ||
-    (payload.password.is_none() && flags.password == true) ||
-    (payload.last_will_message.is_some() && flags.last_will_flag == false) ||
-    (payload.last_will_message.is_none() && flags.last_will_flag == true) ||
-    (payload.last_will_topic.is_some() && flags.last_will_flag == false) ||
-    (payload.last_will_topic.is_none() && flags.last_will_flag == true) {
+    if (payload.username.is_some() && flags.username == false)
+        || (payload.username.is_none() && flags.username == true)
+        || (payload.password.is_some() && flags.password == false)
+        || (payload.password.is_none() && flags.password == true)
+        || (payload.last_will_message.is_some() && flags.last_will_flag == false)
+        || (payload.last_will_message.is_none() && flags.last_will_flag == true)
+        || (payload.last_will_topic.is_some() && flags.last_will_flag == false)
+        || (payload.last_will_topic.is_none() && flags.last_will_flag == true)
+    {
         return Err("Payload invalido".into());
     }
 
@@ -147,8 +152,7 @@ fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), 
 }
 
 /* ------------------------------------------- */
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct ConnectFlags {
     username: bool,
     password: bool,
@@ -197,7 +201,7 @@ impl ConnectFlags {
         if self.clean_session {
             result_byte |= 0b0000_0010;
         }
-        // The LSB (Reserved) must be 0, so we set it to 0. 
+        // The LSB (Reserved) must be 0, so we set it to 0.
         // As there is no QoS 2, the 4th bit is also set to 0.
         stream.write(&[result_byte])?;
         Ok(())
@@ -219,7 +223,7 @@ impl ConnectFlags {
             flags[2] = true; // Last will retain flag
         }
         if flags_byte & 0b0001_0000 == 0b0001_0000 {
-            return Err("4th msb of Connect flags is 1, and should be 0 (Quality of Service can be 1 o 0 only)".into())
+            return Err("4th msb of Connect flags is 1, and should be 0 (Quality of Service can be 1 o 0 only)".into());
         }
         if flags_byte & 0b0000_1000 == 0b0000_1000 {
             flags[4] = true; // Last will qos flag
@@ -231,16 +235,15 @@ impl ConnectFlags {
             flags[6] = true; // Clean session flag
         }
         if flags_byte & 0b0000_0001 == 0b0000_0001 {
-            return Err("Connect flags: Reserved bit should be 0".into())
+            return Err("Connect flags: Reserved bit should be 0".into());
         }
 
-        Ok(ConnectFlags::new(flags[0], flags[1], flags[2], flags[4], flags[5], flags[6]))
+        Ok(ConnectFlags::new(
+            flags[0], flags[1], flags[2], flags[4], flags[5], flags[6],
+        ))
     }
-
-
 }
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct ConnectPayload {
     client_id: String,
     last_will_topic: Option<String>,
@@ -284,7 +287,10 @@ impl ConnectPayload {
         length
     }
 
-    fn read_from(stream: &mut dyn Read, flags: &ConnectFlags) -> Result<ConnectPayload, Box<dyn std::error::Error>> {
+    fn read_from(
+        stream: &mut dyn Read,
+        flags: &ConnectFlags,
+    ) -> Result<ConnectPayload, Box<dyn std::error::Error>> {
         let client_id = decode_utf8(stream)?;
 
         let mut last_will_topic = None;
@@ -301,9 +307,14 @@ impl ConnectPayload {
             password = Some(decode_utf8(stream)?);
         }
 
-        Ok(ConnectPayload::new(client_id, last_will_topic, last_will_message, username, password))
+        Ok(ConnectPayload::new(
+            client_id,
+            last_will_topic,
+            last_will_message,
+            username,
+            password,
+        ))
     }
-
 
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         let client_id_utf8 = encode_utf8(&self.client_id)?;
@@ -311,19 +322,19 @@ impl ConnectPayload {
 
         if let Some(string) = &self.last_will_topic {
             let last_will_topic_utf8 = encode_utf8(string)?;
-            stream.write(&last_will_topic_utf8)?; 
+            stream.write(&last_will_topic_utf8)?;
         }
         if let Some(string) = &self.last_will_message {
             let last_will_message_utf8 = encode_utf8(string)?;
-            stream.write(&last_will_message_utf8)?; 
+            stream.write(&last_will_message_utf8)?;
         }
         if let Some(string) = &self.username {
             let username_utf8 = encode_utf8(string)?;
-            stream.write(&username_utf8)?; 
+            stream.write(&username_utf8)?;
         }
         if let Some(string) = &self.password {
             let password_utf8 = encode_utf8(string)?;
-            stream.write(&password_utf8)?; 
+            stream.write(&password_utf8)?;
         }
 
         Ok(())
@@ -388,7 +399,13 @@ mod tests {
     #[test]
     fn correct_payload() {
         let flags = ConnectFlags::new(true, true, true, true, true, true);
-        let payload = ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()));
+        let payload = ConnectPayload::new(
+            "u".to_owned(),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+        );
 
         let to_test = verify_payload(&flags, &payload);
         assert_eq!(to_test, Ok(()));
@@ -397,7 +414,13 @@ mod tests {
     #[test]
     fn error_payload() {
         let flags = ConnectFlags::new(true, true, true, true, true, true);
-        let payload = ConnectPayload::new("u".to_owned(), None, Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()));
+        let payload = ConnectPayload::new(
+            "u".to_owned(),
+            None,
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+        );
 
         let to_test = verify_payload(&flags, &payload);
         assert_eq!(to_test, Err("Payload invalido".into()));
@@ -405,9 +428,15 @@ mod tests {
     #[test]
     fn correct_packet() {
         let connect_packet = Connect::new(
-            ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned())),
+            ConnectPayload::new(
+                "u".to_owned(),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+            ),
             ConnectFlags::new(true, true, true, true, true, true),
-            60
+            60,
         );
 
         let mut buff = Cursor::new(Vec::new());
@@ -415,18 +444,26 @@ mod tests {
         buff.set_position(1);
         let to_test = Connect::read_from(&mut buff).unwrap();
         if let Packet::Connect(to_test) = to_test {
-            assert!(to_test.connect_flags == connect_packet.connect_flags && 
-            to_test.connect_payload == connect_packet.connect_payload &&
-            to_test.keep_alive_seconds == 60)
+            assert!(
+                to_test.connect_flags == connect_packet.connect_flags
+                    && to_test.connect_payload == connect_packet.connect_payload
+                    && to_test.keep_alive_seconds == 60
+            )
         }
     }
 
     #[test]
     fn error_packet() {
         let connect_packet = Connect::new(
-            ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned())),
+            ConnectPayload::new(
+                "u".to_owned(),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+            ),
             ConnectFlags::new(false, true, true, true, true, true),
-            60
+            60,
         );
 
         let mut buff = Cursor::new(Vec::new());

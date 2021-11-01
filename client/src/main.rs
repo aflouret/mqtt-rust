@@ -1,38 +1,42 @@
-mod client;
-
+use crate::client::Client;
 use common::all_packets::connect::Connect;
 use common::all_packets::connect::ConnectFlags;
 use common::all_packets::connect::ConnectPayload;
-use common::packet::Packet;
-use common::packet::WritePacket;
-use common::parser;
-use std::net::TcpStream;
+mod client;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let address = "127.0.0.1:8080";
-    println!("Conectándome a {:?}", address);
+    let mut client = Client::new("Pepito".to_owned(), "127.0.0.1:8080".to_owned())?;
 
-    client_run(&address)?;
+    let connect_packet = Connect::new(
+        ConnectPayload::new(
+            "u".to_owned(),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+        ),
+        ConnectFlags::new(false, false, false, false, false, false),
+        60,
+    );
+
+    client.client_run(connect_packet)?;
+
     Ok(())
 }
 
-fn client_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
+/*fn client_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut socket = TcpStream::connect(address)?;
 
-    /*
     let connect_packet = Connect::new(
-        "pepito".to_owned(),
-        Some("u".to_owned()),
-        Some("u".to_owned()),
+        ConnectPayload::new(
+            "u".to_owned(),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+            Some("u".to_owned()),
+        ),
         ConnectFlags::new(false, false, false, false, false, false),
-        Some("u".to_owned()),
-        Some("u".to_owned()),
-    );
-    */
-
-    let connect_packet = Connect::new(
-        ConnectPayload::new("u".to_owned(), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned()), Some("u".to_owned())),
-        ConnectFlags::new(false, false, false, false, false, false),
+        60,
     );
 
     connect_packet.write_to(&mut socket)?;
@@ -48,3 +52,4 @@ fn client_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+*/

@@ -90,11 +90,10 @@ fn verify_remaining_length_byte(byte: &[u8; 1]) -> Result<(), String> {
 
 fn verify_packet(session_present_flag: bool, connect_return_code: u8) -> Result<(), String> {
     if connect_return_code != 0 && session_present_flag == true {
-        return Err("Session present debe valer 0".into())
+        return Err("Session present debe valer 0".into());
     }
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -147,7 +146,10 @@ mod tests {
         let to_test = Connack::read_from(&mut buff).unwrap();
         if let Packet::Connack(to_test) = to_test {
             assert_eq!(to_test.session_present, connack_packet.session_present);
-            assert_eq!(to_test.connect_return_code, connack_packet.connect_return_code)
+            assert_eq!(
+                to_test.connect_return_code,
+                connack_packet.connect_return_code
+            )
         }
     }
 

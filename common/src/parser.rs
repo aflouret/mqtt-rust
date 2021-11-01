@@ -22,7 +22,6 @@ pub fn decode_remaining_length(stream: &mut dyn Read) -> Result<u32, Box<dyn std
     let mut multiplier: u32 = 1;
     let mut value: u32 = 0;
     for encoded_byte in stream.bytes() {
-        println!("encoded byte: {:?}", encoded_byte);
         let encoded_byte: u8 = encoded_byte?;
         value += (encoded_byte & 127) as u32 * multiplier;
         if (encoded_byte & 128) == 0 {
@@ -56,7 +55,7 @@ pub fn encode_remaining_length(packet_length: usize) -> Vec<u8> {
     vec
 }
 
-pub fn encode_utf8(string: &String) -> Result<Vec<u8>, String>{
+pub fn encode_utf8(string: &String) -> Result<Vec<u8>, String> {
     let mut vec: Vec<u8> = Vec::new();
 
     let string_bytes = string.as_bytes();
@@ -65,7 +64,7 @@ pub fn encode_utf8(string: &String) -> Result<Vec<u8>, String>{
     if len_string_bytes > 65535 {
         return Err("Incorrect length".into());
     }
-    
+
     let length = len_string_bytes.to_be_bytes();
     vec.push(length[6]);
     vec.push(length[7]);
@@ -76,7 +75,7 @@ pub fn encode_utf8(string: &String) -> Result<Vec<u8>, String>{
     Ok(vec)
 }
 
-pub fn decode_utf8(stream: &mut dyn Read) -> Result<String, std::io::Error>{
+pub fn decode_utf8(stream: &mut dyn Read) -> Result<String, std::io::Error> {
     let mut bytes = [0u8; 2];
     stream.read_exact(&mut bytes)?;
     let number = ((bytes[0] as u16) << 8) | bytes[1] as u16;
@@ -86,7 +85,7 @@ pub fn decode_utf8(stream: &mut dyn Read) -> Result<String, std::io::Error>{
     let payload = String::from_utf8(bytes_2).unwrap();
 
     Ok(payload)
-} 
+}
 
 /* ----------------------------- Unit tests -----------------------------*/
 #[cfg(test)]
