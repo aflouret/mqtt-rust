@@ -240,26 +240,26 @@ impl ConnectFlags {
 #[derive(Debug)]
 pub struct ConnectPayload {
     client_id: String,
-    username: Option<String>,
-    password: Option<String>,
     last_will_topic: Option<String>,
     last_will_message: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
 }
 
 impl ConnectPayload {
     pub fn new(
         client_id: String,
-        username: Option<String>,
-        password: Option<String>,
         last_will_topic: Option<String>,
         last_will_message: Option<String>,
+        username: Option<String>,
+        password: Option<String>,
     ) -> ConnectPayload {
         ConnectPayload {
             client_id,
-            username,
-            password,
             last_will_topic,
             last_will_message,
+            username,
+            password,
         }
     }
 
@@ -306,14 +306,6 @@ impl ConnectPayload {
         let client_id_utf8 = encode_utf8(&self.client_id)?;
         stream.write(&client_id_utf8)?;
 
-        if let Some(string) = &self.username {
-            let username_utf8 = encode_utf8(string)?;
-            stream.write(&username_utf8)?; 
-        }
-        if let Some(string) = &self.password {
-            let password_utf8 = encode_utf8(string)?;
-            stream.write(&password_utf8)?; 
-        }
         if let Some(string) = &self.last_will_topic {
             let last_will_topic_utf8 = encode_utf8(string)?;
             stream.write(&last_will_topic_utf8)?; 
@@ -321,6 +313,14 @@ impl ConnectPayload {
         if let Some(string) = &self.last_will_message {
             let last_will_message_utf8 = encode_utf8(string)?;
             stream.write(&last_will_message_utf8)?; 
+        }
+        if let Some(string) = &self.username {
+            let username_utf8 = encode_utf8(string)?;
+            stream.write(&username_utf8)?; 
+        }
+        if let Some(string) = &self.password {
+            let password_utf8 = encode_utf8(string)?;
+            stream.write(&password_utf8)?; 
         }
 
         Ok(())
