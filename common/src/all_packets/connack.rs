@@ -1,6 +1,9 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
 use std::io::{Read, Write};
 
+pub const CONNACK_PACKET_TYPE: u8 = 0x20;
+const CONNACK_REMAINING_LENGTH: u8 = 2;
+
 pub struct Connack {
     pub session_present: bool,
     pub connect_return_code: u8,
@@ -19,20 +22,14 @@ impl WritePacket for Connack {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         // FIXED HEADER
         // Escribimos el packet type + los flags del packet type
-        let packet_type_and_flags = 0x20_u8;
-        stream.write(&[packet_type_and_flags])?;
+        stream.write(&[CONNACK_PACKET_TYPE])?;
 
         // Escribimos el remaining length
-        let remaining_length = 0x02_u8;
-        stream.write(&[remaining_length])?;
+        stream.write(&[CONNACK_REMAINING_LENGTH])?;
 
         // VARIABLE HEADER
         // Escribimos el session present flag
-        let session_present_flag = if self.session_present == true {
-            0x1_u8
-        } else {
-            0x0_u8
-        };
+        let session_present_flag = self.session_present as u8;
         stream.write(&[session_present_flag])?;
 
         // Escribimos el connect return code
@@ -54,11 +51,8 @@ impl ReadPacket for Connack {
         let mut flags_byte = [0u8; 1];
         stream.read_exact(&mut flags_byte)?;
         verify_flags_byte(&flags_byte)?;
-        let session_present = if flags_byte[0] & 0x1 == 1 {
-            true
-        } else {
-            false
-        };
+
+        let session_present = flags_byte[0] == 0x1;
         println!("Session present leido: {}", session_present);
 
         let mut connect_return_byte = [0u8; 1];
@@ -82,7 +76,7 @@ fn verify_flags_byte(byte: &[u8; 1]) -> Result<(), String> {
 }
 
 fn verify_remaining_length_byte(byte: &[u8; 1]) -> Result<(), String> {
-    if byte[0] != 0x2 {
+    if byte[0] != CONNACK_REMAINING_LENGTH {
         return Err("Remaining length byte inválido".into());
     }
     Ok(())
@@ -98,7 +92,6 @@ fn verify_packet(session_present_flag: bool, connect_return_code: u8) -> Result<
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
-
     use super::*;
 
     #[test]

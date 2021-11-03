@@ -1,11 +1,24 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
 use crate::parser::decode_remaining_length;
-use crate::parser::decode_utf8;
+use crate::parser::decode_mqtt_string;
 use crate::parser::encode_remaining_length;
-use crate::parser::encode_utf8;
+use crate::parser::encode_mqtt_string;
 
 use std::io::Cursor;
 use std::io::{Read, Write};
+
+const PROTOCOL_NAME: &str = "MQTT";
+pub const CONNECT_PACKET_TYPE: u8 = 0x10;
+const CONNECT_VARIABLE_HEADER_BYTES: u32 = 10;
+const CONNECT_PROTOCOL_LEVEL: u8 = 0x04;
+const USERNAME_FLAG: u8 = 0b1000_0000;
+const PASSWORD_FLAG: u8 = 0b0100_0000;
+const LAST_WILL_RETAIN_FLAG: u8 = 0b0010_0000;
+const LAST_WILL_QOS_MSB_FLAG: u8 = 0b0001_0000;
+const LAST_WILL_QOS_LSB_FLAG: u8 = 0b0000_1000;
+const LAST_WILL_FLAG: u8 = 0b0000_0100;
+const CLEAN_SESSION_FLAG: u8 = 0b0000_0010;
+const RESERVED_BIT: u8 = 0b0000_0001;
 
 #[derive(Debug)]
 pub struct Connect {
@@ -27,8 +40,9 @@ impl Connect {
         }
     }
 
-    fn get_remaining_length(&self) -> usize {
-        10 + self.connect_payload.length()
+    fn get_remaining_length(&self) -> Result<u32, String> {  
+        //Variable header bytes + Payload bytes
+        Ok(CONNECT_VARIABLE_HEADER_BYTES + self.connect_payload.length()?)
     }
 }
 
@@ -36,26 +50,24 @@ impl WritePacket for Connect {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         // FIXED HEADER
         // Escribimos el packet type + los flags del packet type
-        let packet_type_and_flags = 0x10_u8;
-        stream.write(&[packet_type_and_flags])?;
+        stream.write(&[CONNECT_PACKET_TYPE])?;
 
         // Escribimos el remaining length
         let remaining_length = self.get_remaining_length();
-        let remaining_length_encoded = encode_remaining_length(remaining_length);
+        let remaining_length_encoded = encode_remaining_length(remaining_length?);
         for byte in remaining_length_encoded {
             stream.write(&[byte])?;
         }
 
         // VARIABLE HEADER
-        // Escribimos los bytes 1-6 correspondientes a la string "MQTT"
-        let mqtt_string_bytes: [u8; 6] = [0x00, 0x04, 0x4D, 0x51, 0x54, 0x54];
-        for byte in &mqtt_string_bytes {
+        let encoded_protocol_name = encode_mqtt_string(&PROTOCOL_NAME)?;
+
+        for byte in &encoded_protocol_name {
             stream.write(&[*byte])?;
         }
 
         // Escribimos el protocol level 4
-        let protocol_level = 0x04;
-        stream.write(&[protocol_level])?;
+        stream.write(&[CONNECT_PROTOCOL_LEVEL])?;
 
         // Escribimos los flags
         self.connect_flags.write_to(stream)?;
@@ -104,7 +116,7 @@ impl ReadPacket for Connect {
 }
 
 fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
-    let mqtt_string_bytes: [u8; 6] = [0x00, 0x04, 0x4D, 0x51, 0x54, 0x54];
+    let mqtt_string_bytes = encode_mqtt_string(&PROTOCOL_NAME)?;
     if mqtt_string_bytes != *bytes {
         return Err("No es MQTT".into());
     }
@@ -113,7 +125,7 @@ fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
 }
 
 fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
-    if byte[0] != 0x4 {
+    if byte[0] != CONNECT_PROTOCOL_LEVEL {
         return Err("Protocol level byte inválido".into());
     }
     Ok(())
@@ -184,22 +196,22 @@ impl ConnectFlags {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         let mut result_byte: u8 = 0b0000_0000;
         if self.username {
-            result_byte |= 0b1000_0000;
+            result_byte |= USERNAME_FLAG;
         }
         if self.password {
-            result_byte |= 0b0100_0000;
+            result_byte |= PASSWORD_FLAG;
         }
         if self.last_will_retain {
-            result_byte |= 0b0010_0000;
+            result_byte |= LAST_WILL_RETAIN_FLAG;
         }
         if self.last_will_qos {
-            result_byte |= 0b0000_1000;
+            result_byte |= LAST_WILL_QOS_LSB_FLAG;
         }
         if self.last_will_flag {
-            result_byte |= 0b0000_0100;
+            result_byte |= LAST_WILL_FLAG;
         }
         if self.clean_session {
-            result_byte |= 0b0000_0010;
+            result_byte |= CLEAN_SESSION_FLAG;
         }
         // The LSB (Reserved) must be 0, so we set it to 0.
         // As there is no QoS 2, the 4th bit is also set to 0.
@@ -213,28 +225,28 @@ impl ConnectFlags {
         let flags_byte = flags_byte[0];
         let mut flags = [false; 8];
 
-        if flags_byte & 0b1000_0000 == 0b1000_0000 {
+        if flags_byte & USERNAME_FLAG == USERNAME_FLAG {
             flags[0] = true; // Username flag
         }
-        if flags_byte & 0b0100_0000 == 0b0100_0000 {
+        if flags_byte & PASSWORD_FLAG == PASSWORD_FLAG {
             flags[1] = true; // Password flag
         }
-        if flags_byte & 0b0010_0000 == 0b0010_0000 {
+        if flags_byte & LAST_WILL_RETAIN_FLAG == LAST_WILL_RETAIN_FLAG {
             flags[2] = true; // Last will retain flag
         }
-        if flags_byte & 0b0001_0000 == 0b0001_0000 {
+        if flags_byte & LAST_WILL_QOS_MSB_FLAG == LAST_WILL_QOS_MSB_FLAG {
             return Err("4th msb of Connect flags is 1, and should be 0 (Quality of Service can be 1 o 0 only)".into());
         }
-        if flags_byte & 0b0000_1000 == 0b0000_1000 {
+        if flags_byte & LAST_WILL_QOS_LSB_FLAG == LAST_WILL_QOS_LSB_FLAG {
             flags[4] = true; // Last will qos flag
         }
-        if flags_byte & 0b0000_0100 == 0b0000_0100 {
+        if flags_byte & LAST_WILL_FLAG == LAST_WILL_FLAG {
             flags[5] = true; // Last will flag
         }
-        if flags_byte & 0b0000_0010 == 0b0000_0010 {
+        if flags_byte & CLEAN_SESSION_FLAG == CLEAN_SESSION_FLAG {
             flags[6] = true; // Clean session flag
         }
-        if flags_byte & 0b0000_0001 == 0b0000_0001 {
+        if flags_byte & RESERVED_BIT == RESERVED_BIT {
             return Err("Connect flags: Reserved bit should be 0".into());
         }
 
@@ -269,42 +281,42 @@ impl ConnectPayload {
         }
     }
 
-    fn length(&self) -> usize {
-        let mut length = self.client_id.as_bytes().len() + 2;
+    fn length(&self) -> Result<u32, String> {
+        let mut length = encode_mqtt_string(&self.client_id)?.len();
         if let Some(string) = &self.username {
-            length += string.as_bytes().len() + 2;
+            length += encode_mqtt_string(string)?.len();
         }
         if let Some(string) = &self.password {
-            length += string.as_bytes().len() + 2;
+            length += encode_mqtt_string(string)?.len();
         }
         if let Some(string) = &self.last_will_topic {
-            length += string.as_bytes().len() + 2;
+            length += encode_mqtt_string(string)?.len();
         }
         if let Some(string) = &self.last_will_message {
-            length += string.as_bytes().len() + 2;
+            length += encode_mqtt_string(string)?.len();
         }
 
-        length
+        Ok(length as u32)
     }
 
     fn read_from(
         stream: &mut dyn Read,
         flags: &ConnectFlags,
     ) -> Result<ConnectPayload, Box<dyn std::error::Error>> {
-        let client_id = decode_utf8(stream)?;
+        let client_id = decode_mqtt_string(stream)?;
 
         let mut last_will_topic = None;
         let mut last_will_message = None;
         if flags.last_will_flag == true {
-            last_will_topic = Some(decode_utf8(stream)?);
-            last_will_message = Some(decode_utf8(stream)?);
+            last_will_topic = Some(decode_mqtt_string(stream)?);
+            last_will_message = Some(decode_mqtt_string(stream)?);
         }
 
         let mut username = None;
         let mut password = None;
         if flags.username == true {
-            username = Some(decode_utf8(stream)?);
-            password = Some(decode_utf8(stream)?);
+            username = Some(decode_mqtt_string(stream)?);
+            password = Some(decode_mqtt_string(stream)?);
         }
 
         Ok(ConnectPayload::new(
@@ -317,23 +329,23 @@ impl ConnectPayload {
     }
 
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
-        let client_id_utf8 = encode_utf8(&self.client_id)?;
+        let client_id_utf8 = encode_mqtt_string(&self.client_id)?;
         stream.write(&client_id_utf8)?;
 
         if let Some(string) = &self.last_will_topic {
-            let last_will_topic_utf8 = encode_utf8(string)?;
+            let last_will_topic_utf8 = encode_mqtt_string(string)?;
             stream.write(&last_will_topic_utf8)?;
         }
         if let Some(string) = &self.last_will_message {
-            let last_will_message_utf8 = encode_utf8(string)?;
+            let last_will_message_utf8 = encode_mqtt_string(string)?;
             stream.write(&last_will_message_utf8)?;
         }
         if let Some(string) = &self.username {
-            let username_utf8 = encode_utf8(string)?;
+            let username_utf8 = encode_mqtt_string(string)?;
             stream.write(&username_utf8)?;
         }
         if let Some(string) = &self.password {
-            let password_utf8 = encode_utf8(string)?;
+            let password_utf8 = encode_mqtt_string(string)?;
             stream.write(&password_utf8)?;
         }
 

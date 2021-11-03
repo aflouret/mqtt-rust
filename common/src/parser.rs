@@ -1,7 +1,11 @@
 use crate::all_packets::connack::Connack;
+use crate::all_packets::connack::CONNACK_PACKET_TYPE;
 use crate::all_packets::connect::Connect;
+use crate::all_packets::connect::CONNECT_PACKET_TYPE;
 use crate::packet::{Packet, ReadPacket};
 use std::io::Read;
+
+const MAX_MQTT_STRING_BYTES: u16 = 65535;
 
 // Devuelve el packet correspondiente a lo que leyó del stream.
 pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
@@ -9,8 +13,8 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
     stream.read_exact(&mut indetifier_byte)?;
 
     match indetifier_byte[0] {
-        0x10 => Ok(Connect::read_from(stream)?),
-        0x20 => Ok(Connack::read_from(stream)?),
+        CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream)?),
+        CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream)?),
         // 0x3_ => { Ok(Publish::read_from(stream)?) }
         _ => Err("Ningún packet tiene ese código".into()),
     }
@@ -23,12 +27,12 @@ pub fn decode_remaining_length(stream: &mut dyn Read) -> Result<u32, Box<dyn std
     let mut value: u32 = 0;
     for encoded_byte in stream.bytes() {
         let encoded_byte: u8 = encoded_byte?;
-        value += (encoded_byte & 127) as u32 * multiplier;
-        if (encoded_byte & 128) == 0 {
+        value += (encoded_byte & 0x7F) as u32 * multiplier;
+        if (encoded_byte & 0x80) == 0 {
             break;
         };
-        multiplier *= 128;
-        if multiplier > 128 * 128 * 128 {
+        multiplier *= 0x80;
+        if multiplier > 0x80 * 0x80 * 0x80 {
             return Err("Incorrect length".into());
         }
     }
@@ -37,15 +41,15 @@ pub fn decode_remaining_length(stream: &mut dyn Read) -> Result<u32, Box<dyn std
 
 // Algoritmo para codificar el Remaining Length. Devuelve un vector que puede ser de 1, 2, 3 ó 4
 // elementos u8
-pub fn encode_remaining_length(packet_length: usize) -> Vec<u8> {
+pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
     let mut vec: Vec<u8> = Vec::new();
     let mut encoded_byte;
     let mut x = packet_length;
     loop {
-        encoded_byte = x % 128;
-        x = x / 128;
+        encoded_byte = x % 0x80;
+        x = x / 0x80;
         if x > 0 {
-            encoded_byte = encoded_byte | 128;
+            encoded_byte = encoded_byte | 0x80;
         }
         vec.push(encoded_byte as u8);
         if x <= 0 {
@@ -55,19 +59,19 @@ pub fn encode_remaining_length(packet_length: usize) -> Vec<u8> {
     vec
 }
 
-pub fn encode_utf8(string: &String) -> Result<Vec<u8>, String> {
+pub fn encode_mqtt_string(string: &str) -> Result<Vec<u8>, String> {
     let mut vec: Vec<u8> = Vec::new();
 
     let string_bytes = string.as_bytes();
-    let len_string_bytes = string_bytes.len();
+    let len_string_bytes = string_bytes.len() as u16;
 
-    if len_string_bytes > 65535 {
+    if len_string_bytes > MAX_MQTT_STRING_BYTES {
         return Err("Incorrect length".into());
     }
 
     let length = len_string_bytes.to_be_bytes();
-    vec.push(length[6]);
-    vec.push(length[7]);
+    vec.push(length[0]);
+    vec.push(length[1]);
     for byte in string_bytes {
         vec.push(*byte);
     }
@@ -75,7 +79,7 @@ pub fn encode_utf8(string: &String) -> Result<Vec<u8>, String> {
     Ok(vec)
 }
 
-pub fn decode_utf8(stream: &mut dyn Read) -> Result<String, std::io::Error> {
+pub fn decode_mqtt_string(stream: &mut dyn Read) -> Result<String, std::io::Error> {
     let mut bytes = [0u8; 2];
     stream.read_exact(&mut bytes)?;
     let number = ((bytes[0] as u16) << 8) | bytes[1] as u16;
@@ -206,43 +210,43 @@ mod tests {
     }
 
     #[test]
-    fn encode_utf8_len_1_byte() {
-        let string = String::from("test");
-        let to_test = encode_utf8(&string).unwrap();
+    fn encode_mqtt_string_len_1_byte() {
+        let string = String::from("MQTT");
+        let to_test = encode_mqtt_string(&string).unwrap();
 
-        assert_eq!(to_test, vec![0, 4, 116, 101, 115, 116]);
+        assert_eq!(to_test, vec![0x00, 0x04, 0x4D, 0x51, 0x54, 0x54]);
     }
 
     #[test]
-    fn encode_utf8_len_0() {
+    fn encode_mqtt_string_len_0() {
         let string = String::from("");
-        let to_test = encode_utf8(&string).unwrap();
+        let to_test = encode_mqtt_string(&string).unwrap();
 
         assert_eq!(to_test, vec![0, 0]);
     }
 
     #[test]
-    fn decode_utf8_len_1_byte() {
+    fn decode_mqtt_string_len_1_byte() {
         let mut buff = Cursor::new(vec![0, 4, 116, 101, 115, 116]);
-        let to_test = decode_utf8(&mut buff).unwrap();
+        let to_test = decode_mqtt_string(&mut buff).unwrap();
 
         assert_eq!(to_test, String::from("test"));
     }
 
     #[test]
-    fn decode_utf8_len_0() {
+    fn decode_mqtt_string_len_0() {
         let mut buff = Cursor::new(vec![0, 0]);
-        let to_test = decode_utf8(&mut buff).unwrap();
+        let to_test = decode_mqtt_string(&mut buff).unwrap();
 
         assert_eq!(to_test, String::from(""));
     }
 
     #[test]
-    fn encode_and_decode_utf8() {
+    fn encode_and_decode_mqtt_string() {
         let string = String::from("mqtt");
-        let encode = encode_utf8(&string).unwrap();
+        let encode = encode_mqtt_string(&string).unwrap();
         let mut buff = Cursor::new(encode);
-        let to_test = decode_utf8(&mut buff).unwrap();
+        let to_test = decode_mqtt_string(&mut buff).unwrap();
 
         assert_eq!(to_test, String::from("mqtt"));
     }
