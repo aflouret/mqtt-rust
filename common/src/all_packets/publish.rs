@@ -7,6 +7,13 @@ use crate::parser::encode_mqtt_string;
 
 pub const PUBLISH_PACKET_TYPE: u8 = 0x30;
 
+#[repr(u8)]
+pub enum Qos {
+    AtMostOnce = 0,
+    AtLeastOnce = 1,
+    ExactlyOnce = 2,
+}
+
 pub struct Publish {
     flags: PublishFlags,
     topic_name: String,
@@ -97,12 +104,12 @@ impl ReadPacket for Publish {
 
 pub struct PublishFlags {
     duplicate: bool,
-    qos_level: bool,
+    qos_level: Qos,
     retain: bool,
 }
 
 impl PublishFlags {
-    pub fn new(duplicate: bool, qos_level: bool, retain: bool,) -> PublishFlags {
+    pub fn new(duplicate: bool, qos_level: Qos, retain: bool,) -> PublishFlags {
         PublishFlags {
             duplicate,
             qos_level,
