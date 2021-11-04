@@ -8,7 +8,7 @@ pub struct Client {
     client_id: String,
     server_stream: TcpStream,
 }
-
+//hilo para enviarle cosas al servidor
 impl Client {
     //Devuelve un cliente ya conectado al address
     pub fn new(client_id: String, address: String) -> Result<Client, Box<dyn std::error::Error>> {
