@@ -2,6 +2,8 @@ use crate::all_packets::connack::Connack;
 use crate::all_packets::connack::CONNACK_PACKET_TYPE;
 use crate::all_packets::connect::Connect;
 use crate::all_packets::connect::CONNECT_PACKET_TYPE;
+use crate::all_packets::publish::Publish;
+use crate::all_packets::publish::PUBLISH_PACKET_TYPE;
 use crate::packet::{Packet, ReadPacket};
 use std::io::Read;
 
@@ -15,7 +17,18 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
     match indetifier_byte[0] {
         CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream)?),
         CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream)?),
-        // 0x3_ => { Ok(Publish::read_from(stream)?) }
+        PUBLISH_PACKET_TYPE => Ok(Publish::read_from(stream)?),
+        // 0x4_ => { Ok(Puback::read_from(stream)?) }
+        // 0x5_ => { Ok(Pubrec::read_from(stream)?) }
+        // 0x6_ => { Ok(Pubrel::read_from(stream)?) }
+        // 0x7_ => { Ok(Pubcomp::read_from(stream)?) }
+        // 0x8_ => { Ok(Subscribe::read_from(stream)?) }
+        // 0x9_ => { Ok(Suback::read_from(stream)?) }
+        // 0xa _ => { Ok(Unsuscribe::read_from(stream)?) }
+        // 0xb_ => { Ok(Unsuback::read_from(stream)?) }
+        // 0xc_ => { Ok(Pingreq::read_from(stream)?) }
+        // 0xd _ => { Ok(Pingresp::read_from(stream)?) }
+        // 0xe _ => { Ok(Disconnect::read_from(stream)?) }
         _ => Err("Ningún packet tiene ese código".into()),
     }
 }

@@ -437,6 +437,7 @@ mod tests {
         let to_test = verify_payload(&flags, &payload);
         assert_eq!(to_test, Err("Payload invalido".into()));
     }
+    
     #[test]
     fn correct_packet() {
         let connect_packet = Connect::new(
