@@ -13,7 +13,7 @@ const MAX_MQTT_STRING_BYTES: u16 = 65535;
 pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
     let mut indetifier_byte = [0u8; 1];
     stream.read_exact(&mut indetifier_byte)?;
-
+    
     match indetifier_byte[0] {
         CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream)?),
         CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream)?),

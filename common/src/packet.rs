@@ -2,12 +2,13 @@ use crate::all_packets::connack::Connack;
 use crate::all_packets::connect::Connect;
 use crate::all_packets::publish::Publish;
 use std::io::{Read, Write};
+use crate::all_packets::puback::Puback;
 
 pub enum Packet {
     Connect(Connect),
     Connack(Connack),
     Publish(Publish),
-    Puback,
+    Puback(Puback),
     Subscribe,
     Unsubscribe,
     Suback,

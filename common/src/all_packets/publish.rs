@@ -8,12 +8,13 @@ use crate::parser::encode_mqtt_string;
 pub const PUBLISH_PACKET_TYPE: u8 = 0x30;
 
 #[repr(u8)]
+#[derive(Clone, Copy, Debug)]
 pub enum Qos {
     AtMostOnce = 0,
     AtLeastOnce = 1,
     ExactlyOnce = 2,
 }
-
+#[derive(Debug)]
 pub struct Publish {
     flags: PublishFlags,
     topic_name: String,
@@ -93,7 +94,7 @@ impl ReadPacket for Publish {
         LOS FLAGS, Y ADEMAS ES EL ÚNICO PAQUETE QUE HACE ESO :/
         */
         Ok(Packet::Publish(Publish::new(
-            PublishFlags::new(true, true, true),
+            PublishFlags::new(true, Qos::AtMostOnce, true),
             "hola".to_owned(),
             Some(1),
             "chau".to_owned(),
@@ -101,7 +102,7 @@ impl ReadPacket for Publish {
         
     }
 }
-
+#[derive(Debug)]
 pub struct PublishFlags {
     duplicate: bool,
     qos_level: Qos,
@@ -127,7 +128,7 @@ mod tests {
     #[test]
     fn correct_remaining_length_qos0() {
         let publish = Publish::new(
-            PublishFlags::new(true, true, true),
+            PublishFlags::new(true, Qos::AtMostOnce, true),
             "Topic".to_string(),
             None,
             "Message".to_string(),
@@ -141,12 +142,12 @@ mod tests {
     #[test]
     fn correct_remaining_length_qos1() {
         let publish = Publish::new(
-            PublishFlags::new(true, true, true),
+            PublishFlags::new(true, Qos::AtMostOnce, true),
             "Topic".to_string(),
             Some(15),
             "Message".to_string(),
         );
-
+        println!("{:?}",publish);
         let to_test = publish.get_remaining_length().unwrap();
         assert_eq!(to_test, 18);
 

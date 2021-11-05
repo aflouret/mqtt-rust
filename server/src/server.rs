@@ -41,9 +41,9 @@ impl Server {
         let received_packet = parser::read_packet(client_stream)?;
         println!("Se recibió el connect packet");
         //Si es connect el primer paquete del cliente creamos session
-        if let Packet::Connect(received_packet) = received_packet {
+/*        if let Packet::Connect(received_packet) = received_packet {
             let session = Session::new(client_stream, received_packet);
-        }
+        }*/
         let connack_packet = Connack::new(false, 0);
         connack_packet.write_to(client_stream)?;
         println!("Se envió el connack packet");

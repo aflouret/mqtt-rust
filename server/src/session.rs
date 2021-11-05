@@ -22,7 +22,11 @@ impl Session {
 }
 
 fn parse_connect_data(packet_connect: Connect) -> ClientData {
-
+    ClientData{
+        client_id:"hola".to_string(),
+        username: Option::from("test".to_string()),
+        password: Option::from("ttt".to_string()),
+    }
 }
 
 pub struct ClientData{

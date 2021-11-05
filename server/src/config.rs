@@ -9,6 +9,9 @@ impl Config {
         Config {
             port: 8080,
             address: "0.0.0.0:".to_string(),
+            //Path de archivo sobre el cuál se realizará un dump
+            //Intervalo de tiempo para el cual se realizará el dump
+            //Path de archivo de log
         }
     }
 
