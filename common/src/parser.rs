@@ -14,10 +14,10 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
     let mut indetifier_byte = [0u8; 1];
     stream.read_exact(&mut indetifier_byte)?;
     
-    match indetifier_byte[0] {
-        CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream)?),
-        CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream)?),
-        PUBLISH_PACKET_TYPE => Ok(Publish::read_from(stream)?),
+    match indetifier_byte[0] & 0xF0 {
+        CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream, indetifier_byte[0])?),
+        CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream, indetifier_byte[0])?),
+        PUBLISH_PACKET_TYPE => Ok(Publish::read_from(stream, indetifier_byte[0])?),
         // 0x4_ => { Ok(Puback::read_from(stream)?) }
         // 0x5_ => { Ok(Pubrec::read_from(stream)?) }
         // 0x6_ => { Ok(Pubrel::read_from(stream)?) }

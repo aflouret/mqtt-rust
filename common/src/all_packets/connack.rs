@@ -40,7 +40,7 @@ impl WritePacket for Connack {
 }
 
 impl ReadPacket for Connack {
-    fn read_from(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
         println!("Entro a connack");
 
         let mut remaining_length_byte = [0u8; 1];
@@ -136,7 +136,7 @@ mod tests {
         let mut buff = Cursor::new(Vec::new());
         connack_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
-        let to_test = Connack::read_from(&mut buff).unwrap();
+        let to_test = Connack::read_from(&mut buff, 0x20).unwrap();
         if let Packet::Connack(to_test) = to_test {
             assert_eq!(to_test.session_present, connack_packet.session_present);
             assert_eq!(
@@ -153,7 +153,7 @@ mod tests {
         let mut buff = Cursor::new(Vec::new());
         connack_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
-        let to_test = Connack::read_from(&mut buff);
+        let to_test = Connack::read_from(&mut buff, 0x20);
         assert!(to_test.is_err());
     }
 }

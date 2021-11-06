@@ -83,7 +83,7 @@ impl WritePacket for Connect {
 }
 
 impl ReadPacket for Connect {
-    fn read_from(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
         let remaining_length = decode_remaining_length(stream)?;
 
         let mut remaining = vec![0u8; remaining_length as usize];
@@ -457,7 +457,7 @@ mod tests {
         let mut buff = Cursor::new(Vec::new());
         connect_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
-        let to_test = Connect::read_from(&mut buff).unwrap();
+        let to_test = Connect::read_from(&mut buff, 0x10).unwrap();
         if let Packet::Connect(to_test) = to_test {
             assert!(
                 to_test.connect_flags == connect_packet.connect_flags
@@ -484,7 +484,7 @@ mod tests {
         let mut buff = Cursor::new(Vec::new());
         connect_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
-        let to_test = Connect::read_from(&mut buff);
+        let to_test = Connect::read_from(&mut buff, 0x10);
         assert!(to_test.is_err());
     }
 }

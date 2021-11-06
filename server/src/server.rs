@@ -44,6 +44,7 @@ impl Server {
         println!("Se recibió el connect packet");
         //Si es connect el primer paquete del cliente creamos session
         //Preguntar si connack y los otros paquetes los manda el servidor o la sesion
+        let mut client_stream_clone = client_stream.try_clone()?;
         if let Packet::Connect(received_packet) = received_packet {
             let mut session = Session::new(client_stream, received_packet, &self.clients)?;
             let connack_packet = Connack::new(false, 0);
@@ -52,14 +53,14 @@ impl Server {
             self.clients.insert(session.get_client_id().to_string(), session);
         }
 
-        /*loop {
-            let received_packet = parser::read_packet(&mut client_stream)?;
+        loop {
+            let received_packet = parser::read_packet(&mut client_stream_clone)?;
             match received_packet {
-                Packet::Connect(connect_packet) => {handle_connect_packet(connect_packet)},
-                Packet::Publish(publish_packet) => {handle_publish_packet(publish_packet)},
+                //Packet::Connect(connect_packet) => {handle_connect_packet(connect_packet)},
+                Packet::Publish(publish_packet) => {println!("Recibi el publish")},
                 _ => {return Err("Invalid packet".into())},
             }
-        }*/
+        }
 
         Ok(())
     }

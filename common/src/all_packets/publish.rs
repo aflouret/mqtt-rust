@@ -1,4 +1,5 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
+use std::io::Cursor;
 use std::io::{Read, Write};
 use crate::parser::decode_remaining_length;
 use crate::parser::decode_mqtt_string;
@@ -12,7 +13,7 @@ pub const PUBLISH_PACKET_TYPE: u8 = 0x30;
 pub enum Qos {
     AtMostOnce = 0,
     AtLeastOnce = 1,
-    ExactlyOnce = 2,
+    //ExactlyOnce = 2,
 }
 #[derive(Debug)]
 pub struct Publish {
@@ -88,16 +89,34 @@ impl WritePacket for Publish {
 }
 
 impl ReadPacket for Publish {
-    fn read_from(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
-        /*
-        PROBLEMA CON RESERVED BYTES: EL BYTE QUE LEEMOS PARA HACER EL MATCH INICIAL CONTIENE
-        LOS FLAGS, Y ADEMAS ES EL ÚNICO PAQUETE QUE HACE ESO :/
-        */
+    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+        
+        let publish_flags = PublishFlags::new(initial_byte);
+        let remaining_length = decode_remaining_length(stream)?;
+
+        let mut remaining = vec![0u8; remaining_length as usize];
+        stream.read_exact(&mut remaining)?;
+        let mut remaining_bytes = Cursor::new(remaining);
+
+        let mut topic_name = decode_mqtt_string(&mut remaining_bytes)?;
+
+        let packet_id = match publish_flags.qos_level {
+            Qos::AtLeastOnce => {
+                let mut bytes = [0u8; 2];
+                stream.read_exact(&mut bytes)?;
+                Some(((bytes[0] as u16) << 8) | bytes[1] as u16)
+            }
+            
+            _ => None
+        };
+
+        let mut application_message = decode_mqtt_string(&mut remaining_bytes)?;
+
         Ok(Packet::Publish(Publish::new(
-            PublishFlags::new(true, Qos::AtMostOnce, true),
-            "hola".to_owned(),
-            Some(1),
-            "chau".to_owned(),
+            publish_flags,
+            topic_name,
+            packet_id,
+            application_message
         )))
         
     }
@@ -110,7 +129,14 @@ pub struct PublishFlags {
 }
 
 impl PublishFlags {
-    pub fn new(duplicate: bool, qos_level: Qos, retain: bool,) -> PublishFlags {
+    pub fn new(initial_byte: u8) -> PublishFlags {
+        let retain = (initial_byte & 0x01) != 0;
+        let duplicate = (initial_byte & 0x08) != 0;
+        let qos_level = match initial_byte & 0x02 >> 1  {
+            0 => Qos::AtMostOnce,
+            _ => Qos::AtLeastOnce,
+        };
+
         PublishFlags {
             duplicate,
             qos_level,
@@ -128,7 +154,7 @@ mod tests {
     #[test]
     fn correct_remaining_length_qos0() {
         let publish = Publish::new(
-            PublishFlags::new(true, Qos::AtMostOnce, true),
+            PublishFlags::new(0b0100_1011),
             "Topic".to_string(),
             None,
             "Message".to_string(),
@@ -142,7 +168,7 @@ mod tests {
     #[test]
     fn correct_remaining_length_qos1() {
         let publish = Publish::new(
-            PublishFlags::new(true, Qos::AtMostOnce, true),
+            PublishFlags::new(0b0100_1011),
             "Topic".to_string(),
             Some(15),
             "Message".to_string(),

@@ -17,7 +17,7 @@ pub enum Packet {
 }
 
 pub trait ReadPacket {
-    fn read_from(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>>;
+    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>>;
 }
 
 pub trait WritePacket {
