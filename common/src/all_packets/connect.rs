@@ -22,9 +22,9 @@ const RESERVED_BIT: u8 = 0b0000_0001;
 
 #[derive(Debug)]
 pub struct Connect {
-    connect_payload: ConnectPayload,
-    connect_flags: ConnectFlags,
-    keep_alive_seconds: u16,
+    pub connect_payload: ConnectPayload,
+    pub connect_flags: ConnectFlags,
+    pub keep_alive_seconds: u16,
 }
 
 impl Connect {
@@ -168,8 +168,8 @@ fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), 
 /* ------------------------------------------- */
 #[derive(PartialEq, Debug)]
 pub struct ConnectFlags {
-    username: bool,
-    password: bool,
+    pub username: bool,
+    pub password: bool,
     last_will_retain: bool,
     last_will_qos: bool,
     last_will_flag: bool,
@@ -259,11 +259,11 @@ impl ConnectFlags {
 }
 #[derive(PartialEq, Debug)]
 pub struct ConnectPayload {
-    client_id: String,
-    last_will_topic: Option<String>,
-    last_will_message: Option<String>,
-    username: Option<String>,
-    password: Option<String>,
+    pub client_id: String,
+    pub last_will_topic: Option<String>,
+    pub last_will_message: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
 }
 
 impl ConnectPayload {

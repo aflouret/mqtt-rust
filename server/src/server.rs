@@ -5,17 +5,19 @@ use common::parser;
 use std::io;
 use std::net::{TcpListener, TcpStream};
 use crate::session::Session;
+use std::collections::HashMap;
 
 pub struct Server {
     config: Config,
+    clients: HashMap<String, Session>,
 }
 //guardar sesion de un cliente
 impl Server {
     pub fn new(config: Config) -> io::Result<Self> {
-        Ok(Self { config })
+        Ok(Self { config, clients: HashMap::new() })
     }
 
-    pub fn server_run(self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn server_run(mut self) -> Result<(), Box<dyn std::error::Error>> {
         let address = self.config.get_address() + &*self.config.get_port();
 
         let listener = TcpListener::bind(&address)?;
@@ -24,7 +26,7 @@ impl Server {
 
         for stream in listener.incoming() {
             if let Ok(mut client_stream) = stream {
-                self.handle_client(&mut client_stream)?;
+                self.handle_client(client_stream)?;
 
             }
         }
@@ -34,19 +36,30 @@ impl Server {
 
     // Leemos y escribimos packets, etc.
     fn handle_client(
-        &self,
-        client_stream: &mut TcpStream,
+        &mut self,
+        mut client_stream: TcpStream,
     ) -> Result<(), Box<dyn std::error::Error>> {
         //Chequear que el cliente sea nueva y que el primer paquete sea el connect
-        let received_packet = parser::read_packet(client_stream)?;
+        let received_packet = parser::read_packet(&mut client_stream)?;
         println!("Se recibió el connect packet");
         //Si es connect el primer paquete del cliente creamos session
-/*        if let Packet::Connect(received_packet) = received_packet {
-            let session = Session::new(client_stream, received_packet);
+        //Preguntar si connack y los otros paquetes los manda el servidor o la sesion
+        if let Packet::Connect(received_packet) = received_packet {
+            let mut session = Session::new(client_stream, received_packet, &self.clients)?;
+            let connack_packet = Connack::new(false, 0);
+            connack_packet.write_to(session.get_socket())?;
+            println!("Se envió el connack packet");
+            self.clients.insert(session.get_client_id().to_string(), session);
+        }
+
+        /*loop {
+            let received_packet = parser::read_packet(&mut client_stream)?;
+            match received_packet {
+                Packet::Connect(connect_packet) => {handle_connect_packet(connect_packet)},
+                Packet::Publish(publish_packet) => {handle_publish_packet(publish_packet)},
+                _ => {return Err("Invalid packet".into())},
+            }
         }*/
-        let connack_packet = Connack::new(false, 0);
-        connack_packet.write_to(client_stream)?;
-        println!("Se envió el connack packet");
 
         Ok(())
     }
