@@ -1,4 +1,4 @@
-use crate::packet::{Packet, ReadPacket, WritePacket};
+use crate::packet::{Packet, ReadPacket, WritePacket, Qos};
 use std::io::Cursor;
 use std::io::{Read, Write};
 use crate::parser::decode_remaining_length;
@@ -8,13 +8,6 @@ use crate::parser::encode_mqtt_string;
 
 pub const PUBLISH_PACKET_TYPE: u8 = 0x30;
 
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Qos {
-    AtMostOnce = 0,
-    AtLeastOnce = 1,
-    //ExactlyOnce = 2,
-}
 #[derive(Debug)]
 pub struct Publish {
     flags: PublishFlags,

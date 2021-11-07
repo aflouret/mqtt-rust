@@ -4,6 +4,14 @@ use crate::all_packets::publish::Publish;
 use std::io::{Read, Write};
 use crate::all_packets::puback::Puback;
 
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Qos {
+    AtMostOnce = 0,
+    AtLeastOnce = 1,
+    //ExactlyOnce = 2,
+}
+
 pub enum Packet {
     Connect(Connect),
     Connack(Connack),
