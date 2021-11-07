@@ -9,7 +9,7 @@ use crate::parser::encode_mqtt_string;
 pub const PUBLISH_PACKET_TYPE: u8 = 0x30;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Qos {
     AtMostOnce = 0,
     AtLeastOnce = 1,
@@ -56,7 +56,7 @@ impl WritePacket for Publish {
         (self.flags.qos_level as u8) << 1 |
         (self.flags.retain as u8);
         stream.write(&[first_byte])?;
-
+        
         // Escribimos el remaining length
         let remaining_length = self.get_remaining_length();
         let remaining_length_encoded = encode_remaining_length(remaining_length?);
@@ -90,27 +90,27 @@ impl WritePacket for Publish {
 
 impl ReadPacket for Publish {
     fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
-        
         let publish_flags = PublishFlags::new(initial_byte);
-        let remaining_length = decode_remaining_length(stream)?;
+        verify_publish_flags(&publish_flags)?;
 
+        let remaining_length = decode_remaining_length(stream)?;
         let mut remaining = vec![0u8; remaining_length as usize];
         stream.read_exact(&mut remaining)?;
         let mut remaining_bytes = Cursor::new(remaining);
 
-        let mut topic_name = decode_mqtt_string(&mut remaining_bytes)?;
+        let topic_name = decode_mqtt_string(&mut remaining_bytes)?;
 
         let packet_id = match publish_flags.qos_level {
             Qos::AtLeastOnce => {
                 let mut bytes = [0u8; 2];
-                stream.read_exact(&mut bytes)?;
-                Some(((bytes[0] as u16) << 8) | bytes[1] as u16)
+                remaining_bytes.read_exact(&mut bytes)?;
+                Some(u16::from_be_bytes(bytes))
             }
             
             _ => None
         };
 
-        let mut application_message = decode_mqtt_string(&mut remaining_bytes)?;
+        let application_message = decode_mqtt_string(&mut remaining_bytes)?;
 
         Ok(Packet::Publish(Publish::new(
             publish_flags,
@@ -118,9 +118,17 @@ impl ReadPacket for Publish {
             packet_id,
             application_message
         )))
-        
     }
 }
+
+fn verify_publish_flags(flags: &PublishFlags) -> Result<(), String> {
+    if flags.qos_level == Qos::AtMostOnce && flags.duplicate == true {
+        return Err("The DUP flag MUST be set to 0 for all QoS 0 messages".into());
+    }
+
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct PublishFlags {
     duplicate: bool,
@@ -128,6 +136,7 @@ pub struct PublishFlags {
     retain: bool,
 }
 
+//Falta checkear: If a Server or Client receives a PUBLISH Packet which has both QoS bits set to 1 it MUST close the Network Connection
 impl PublishFlags {
     pub fn new(initial_byte: u8) -> PublishFlags {
         let retain = (initial_byte & 0x01) != 0;
@@ -177,5 +186,62 @@ mod tests {
         let to_test = publish.get_remaining_length().unwrap();
         assert_eq!(to_test, 18);
 
+    }
+
+    #[test]
+    fn correct_new_publishflag_all_true() {
+        
+        let to_test = PublishFlags::new(0b0100_1011);
+
+        assert_eq!(to_test.duplicate, true);
+        assert_eq!(to_test.qos_level, Qos::AtLeastOnce);
+        assert_eq!(to_test.retain, true);
+    }
+
+    #[test]
+    fn correct_new_publishflag_all_false() {
+        let to_test = PublishFlags::new(0b0100_0000);
+
+        assert_eq!(to_test.duplicate, false);
+        assert_eq!(to_test.qos_level, Qos::AtMostOnce);
+        assert_eq!(to_test.retain, false);
+    }
+    
+    #[test]
+    fn correct_packet() {
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_1011),
+            "Topic".to_string(),
+            Some(15),
+            "Message".to_string(),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        publish_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Publish::read_from(&mut buff, 0x4b).unwrap();
+        if let Packet::Publish(to_test) = to_test {
+            assert!(
+                    to_test.topic_name == publish_packet.topic_name
+                    && to_test.packet_id == publish_packet.packet_id
+                    && to_test.application_message == publish_packet.application_message
+            )
+        }
+    }
+
+    #[test]
+    fn error_packet() {
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_1011),
+            "Topic".to_string(),
+            Some(15),
+            "Message".to_string(),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        publish_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Publish::read_from(&mut buff, 0x10);
+        assert!(to_test.is_err());
     }
 }

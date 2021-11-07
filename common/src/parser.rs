@@ -4,6 +4,8 @@ use crate::all_packets::connect::Connect;
 use crate::all_packets::connect::CONNECT_PACKET_TYPE;
 use crate::all_packets::publish::Publish;
 use crate::all_packets::publish::PUBLISH_PACKET_TYPE;
+use crate::all_packets::puback::Puback;
+use crate::all_packets::puback::PUBACK_PACKET_TYPE;
 use crate::packet::{Packet, ReadPacket};
 use std::io::Read;
 
@@ -18,17 +20,17 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
         CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream, indetifier_byte[0])?),
         CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream, indetifier_byte[0])?),
         PUBLISH_PACKET_TYPE => Ok(Publish::read_from(stream, indetifier_byte[0])?),
-        // 0x4_ => { Ok(Puback::read_from(stream)?) }
-        // 0x5_ => { Ok(Pubrec::read_from(stream)?) }
-        // 0x6_ => { Ok(Pubrel::read_from(stream)?) }
-        // 0x7_ => { Ok(Pubcomp::read_from(stream)?) }
-        // 0x8_ => { Ok(Subscribe::read_from(stream)?) }
-        // 0x9_ => { Ok(Suback::read_from(stream)?) }
-        // 0xa _ => { Ok(Unsuscribe::read_from(stream)?) }
-        // 0xb_ => { Ok(Unsuback::read_from(stream)?) }
-        // 0xc_ => { Ok(Pingreq::read_from(stream)?) }
-        // 0xd _ => { Ok(Pingresp::read_from(stream)?) }
-        // 0xe _ => { Ok(Disconnect::read_from(stream)?) }
+        PUBACK_PACKET_TYPE =>  Ok(Puback::read_from(stream, indetifier_byte[0])?),
+        // 0x5_ => { Ok(Pubrec::read_from(stream, indetifier_byte[0])?) }
+        // 0x6_ => { Ok(Pubrel::read_from(stream, indetifier_byte[0])?) }
+        // 0x7_ => { Ok(Pubcomp::read_from(stream, indetifier_byte[0])?) }
+        // 0x8_ => { Ok(Subscribe::read_from(stream, indetifier_byte[0])?) }
+        // 0x9_ => { Ok(Suback::read_from(stream, indetifier_byte[0])?) }
+        // 0xa _ => { Ok(Unsuscribe::read_from(stream, indetifier_byte[0])?) }
+        // 0xb_ => { Ok(Unsuback::read_from(stream, indetifier_byte[0])?) }
+        // 0xc_ => { Ok(Pingreq::read_from(stream, indetifier_byte[0])?) }
+        // 0xd _ => { Ok(Pingresp::read_from(stream, indetifier_byte[0])?) }
+        // 0xe _ => { Ok(Disconnect::read_from(stream, indetifier_byte[0])?) }
         _ => Err("Ningún packet tiene ese código".into()),
     }
 }
@@ -95,7 +97,7 @@ pub fn encode_mqtt_string(string: &str) -> Result<Vec<u8>, String> {
 pub fn decode_mqtt_string(stream: &mut dyn Read) -> Result<String, std::io::Error> {
     let mut bytes = [0u8; 2];
     stream.read_exact(&mut bytes)?;
-    let number = ((bytes[0] as u16) << 8) | bytes[1] as u16;
+    let number = u16::from_be_bytes(bytes);
 
     let mut bytes_2 = vec![0; number as usize];
     stream.read_exact(&mut bytes_2)?;

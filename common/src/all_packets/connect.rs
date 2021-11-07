@@ -44,8 +44,6 @@ impl Connect {
         //Variable header bytes + Payload bytes
         Ok(CONNECT_VARIABLE_HEADER_BYTES + self.connect_payload.length()?)
     }
-
-
 }
 
 impl WritePacket for Connect {
@@ -354,6 +352,7 @@ impl ConnectPayload {
         Ok(())
     }
 }
+
 /* ------------------------------------------- */
 
 #[cfg(test)]
