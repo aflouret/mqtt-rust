@@ -125,6 +125,8 @@ fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
 }
 
 fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
+    //TODO: The Server MUST respond to the 401 CONNECT Packet with a CONNACK return code 0x01 
+    // (unacceptable protocol level) and then disconnect 402 the Client if the Protocol Level is not supported by the Server
     if byte[0] != CONNECT_PROTOCOL_LEVEL {
         return Err("Protocol level byte inválido".into());
     }
@@ -171,7 +173,7 @@ pub struct ConnectFlags {
     last_will_retain: bool,
     last_will_qos: bool,
     last_will_flag: bool,
-    clean_session: bool,
+    pub clean_session: bool,
 }
 
 impl ConnectFlags {
