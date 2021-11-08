@@ -44,14 +44,6 @@ impl Connect {
         //Variable header bytes + Payload bytes
         Ok(CONNECT_VARIABLE_HEADER_BYTES + self.connect_payload.length()?)
     }
-
-    pub fn get_payload(&self) -> &ConnectPayload {
-        return &self.connect_payload;
-    }
-
-    pub fn get_flags(&self) -> &ConnectFlags {
-        return  &self.connect_flags;
-    }
 }
 
 impl WritePacket for Connect {
@@ -289,24 +281,6 @@ impl ConnectPayload {
             username,
             password,
         }
-    }
-
-    pub fn get_client_id(&self) -> &String {
-        return &self.client_id;
-    }
-    //Result<&Option<String>,Box<dyn std::error::Error>>
-    pub fn get_username(&self) -> &Option<String> {
-/*       if self.username.is_none() {
-           Err("No username");
-       }*/
-        return &self.username;
-    }
-
-    pub fn get_password(&self) -> &Option<String> {
-/*        if self.password.is_none() {
-            Err("No password");
-        }*/
-        return &self.password;
     }
 
     fn length(&self) -> Result<u32, String> {
