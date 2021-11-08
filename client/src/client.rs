@@ -11,7 +11,7 @@ use std::thread;
 
 pub struct Client {
     client_id: String,
-    server_stream: TcpStream,
+    server_stream: TcpStream, //Option<TcpStream>
 }
 
 //hilo para enviarle cosas al servidor
@@ -51,6 +51,8 @@ impl Client {
 
         //Escritura
         let mut server_stream_write = self.server_stream.try_clone()?;
+/*        let server_stream = take().unwrap();
+        let el_otro = server_stream.try_clone();*/
         let handler_write = thread::spawn(move || {
             loop {
                 println!("Entro al thread de escritura");
@@ -60,6 +62,7 @@ impl Client {
                     Some(15),
                     "Message".to_string(),
                 );
+                //mpsc - channel -
                 //println!("{:?}",publish_packet);
                 publish_packet.write_to(&mut server_stream_write).unwrap();
                 println!("Se envio el publish");
@@ -67,13 +70,15 @@ impl Client {
             }
         });
         //Lectura
-        let mut server_stream_read = self.server_stream.try_clone()?;
+        //let mut server_stream_read = self.server_stream.try_clone()?;
         let handler_read = thread::spawn(move || {
-            println!("Entro al thread de lectura");
-            let receiver_packet = parser::read_packet(&mut server_stream_read).unwrap();
-            println!("Socket Lectura Client: {:?}",server_stream_read);
-            if let Packet::Puback(_puback_packet) = receiver_packet {
-                println!("Se recibió el puback packet");
+            loop {
+                println!("Entro al thread de lectura");
+                let receiver_packet = parser::read_packet(&mut server_stream_write).unwrap();
+                println!("Socket Lectura Client: {:?}", server_stream_write);
+                if let Packet::Puback(_puback_packet) = receiver_packet {
+                    println!("Se recibió el puback packet");
+                }
             }
         });
 

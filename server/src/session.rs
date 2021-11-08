@@ -3,13 +3,19 @@ use std::net::TcpStream;
 use common::all_packets::connect::Connect;
 use common::packet::Packet;
 
+//Manjea datos del cliente
 pub struct Session {
-    socket: TcpStream,
+    socket: TcpStream,//Option<Tcp>, cuando se desconecta queda en None
     client_packets: Vec<Packet>,
     client: ClientData,
     pub is_active: bool,
     client_subscriptions: Vec<Subscription>,
     not_fully_transmitted_messages: Vec<NotFullyTransmittedMessages>
+}
+
+pub struct ClientHandler {
+    //Maneja la conexion del socket
+    //Info al server
 }
 
 impl Session {
@@ -50,12 +56,9 @@ impl Session {
 
 fn parse_connect_data(packet_connect: Connect) -> ClientData {
     ClientData{
-/*        client_id: packet_connect.connect_payload.client_id,
+        client_id: packet_connect.connect_payload.client_id,
         username: packet_connect.connect_payload.username,
-        password: packet_connect.connect_payload.password,*/
-        client_id: packet_connect.get_payload().get_client_id().clone(),
-        username: packet_connect.get_payload().get_username().clone(),
-        password: packet_connect.get_payload().get_password().clone(),
+        password: packet_connect.connect_payload.password,
     }
 }
 

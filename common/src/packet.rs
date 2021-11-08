@@ -9,7 +9,6 @@ use crate::all_packets::puback::Puback;
 pub enum Qos {
     AtMostOnce = 0,
     AtLeastOnce = 1,
-    //ExactlyOnce = 2,
 }
 
 pub enum Packet {
