@@ -9,6 +9,8 @@ use std::net::{TcpListener, TcpStream};
 use std::collections::HashMap;
 use std::slice::SliceIndex;
 use std::thread::current;
+use common::all_packets::publish::Publish;
+use common::all_packets::puback::Puback;
 
 pub struct Server {
     config: Config,
@@ -51,14 +53,32 @@ impl Server {
             return Err("No connect packet received".into())
         };
 
-        while client_session.is_active() {
+       // while client_session.is_active() {
+        loop {
             let received_packet = parser::read_packet(&mut client_stream_clone)?;
             match received_packet {
-                Packet::Publish(publish_packet) => {println!("Recibi el publish");},
-                _ => {return Err("Invalid packet".into())},
+                Packet::Publish(publish_packet) => {
+                    self.handle_publish_packet(publish_packet)?;
+                },
+                _ => { return Err("Invalid packet".into()) },
             }
         }
 
+        Ok(())
+    }
+
+    fn handle_publish_packet(&mut self, publish_packet: Publish) -> Result<(), Box<dyn std::error::Error>> {
+        println!("Se recibió el publish packet");
+        //Sacamos el packet_id del pubblish
+        //Sacar info del publish
+        //Mandamos el puback al client.
+        let packet_id = 1 as u16;
+        let puback_packet_response = Puback::new(packet_id);
+        let current_session = self.clients.get_mut("u").unwrap(); //TODO: sacar unwrap
+        let mut socket = current_session.get_socket().try_clone().unwrap();
+        println!("{:?}",socket);
+        puback_packet_response.write_to(&mut socket)?;
+        println!("Se envio correctamente el PUBACK");
         Ok(())
     }
 

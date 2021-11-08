@@ -13,6 +13,7 @@ pub struct Client {
     client_id: String,
     server_stream: TcpStream,
 }
+
 //hilo para enviarle cosas al servidor
 impl Client {
     //Devuelve un cliente ya conectado al address
@@ -37,31 +38,47 @@ impl Client {
         if let Packet::Connack(_connack_packet) = received_packet {
             println!("Se recibió el connack packet");
         }
+/*        let mut server_stream_write = self.server_stream.try_clone()?;
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_1011),
+            "Topic".to_string(),
+            Some(15),
+            "Message".to_string(),
+        );
+        println!("{:?}",publish_packet);
+        publish_packet.write_to(&mut server_stream_write).unwrap();
+        println!("Se envio el publish");*/
 
+        //Escritura
         let mut server_stream_write = self.server_stream.try_clone()?;
-        thread::spawn(move || {
+        let handler_write = thread::spawn(move || {
             loop {
-                println!("Entramos al loop");
+                println!("Entro al thread de escritura");
                 let publish_packet = Publish::new(
                     PublishFlags::new(0b0100_1011),
                     "Topic".to_string(),
                     Some(15),
                     "Message".to_string(),
                 );
+                //println!("{:?}",publish_packet);
                 publish_packet.write_to(&mut server_stream_write).unwrap();
                 println!("Se envio el publish");
-                thread::sleep(Duration::from_millis(1000));
+                thread::sleep(Duration::from_millis(3000));
             }
         });
-        
+        //Lectura
         let mut server_stream_read = self.server_stream.try_clone()?;
-        thread::spawn(move || {
-            loop {
-
+        let handler_read = thread::spawn(move || {
+            println!("Entro al thread de lectura");
+            let receiver_packet = parser::read_packet(&mut server_stream_read).unwrap();
+            println!("Socket Lectura Client: {:?}",server_stream_read);
+            if let Packet::Puback(_puback_packet) = receiver_packet {
+                println!("Se recibió el puback packet");
             }
         });
-        
 
+        handler_write.join().unwrap();
+        handler_read.join().unwrap();
         Ok(())
     }
 }

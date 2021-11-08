@@ -49,7 +49,6 @@ impl WritePacket for Publish {
         (self.flags.qos_level as u8) << 1 |
         (self.flags.retain as u8);
         stream.write(&[first_byte])?;
-        
         // Escribimos el remaining length
         let remaining_length = self.get_remaining_length();
         let remaining_length_encoded = encode_remaining_length(remaining_length?);
@@ -76,7 +75,7 @@ impl WritePacket for Publish {
         for byte in &encoded_message {
             stream.write(&[*byte])?;
         }
-
+        println!("Escribo bien el publish");
         Ok(())
     }
 }
@@ -104,7 +103,6 @@ impl ReadPacket for Publish {
         };
 
         let application_message = decode_mqtt_string(&mut remaining_bytes)?;
-
         Ok(Packet::Publish(Publish::new(
             publish_flags,
             topic_name,
