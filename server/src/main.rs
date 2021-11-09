@@ -1,5 +1,5 @@
 use common::all_packets::connack::Connack;
-use common::all_packets::connect::{Connect, ConnectFlags, ConnectPayload};
+use common::all_packets::connect::{Connect, ConnectPayload};
 use common::packet::Packet;
 use crate::config::Config;
 use crate::server::Server;

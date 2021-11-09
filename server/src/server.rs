@@ -86,7 +86,7 @@ impl Server {
         println!("Se recibió el connect packet");
 
         let client_id = connect_packet.connect_payload.client_id.to_owned();
-        let clean_session = connect_packet.connect_flags.clean_session;
+        let clean_session = connect_packet.clean_session;
         let exists_previous_session = self.clients.contains_key(&client_id);
 
         // Si hay un cliente con mismo client_id conectado, lo desconectamos

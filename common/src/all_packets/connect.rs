@@ -23,26 +23,58 @@ const RESERVED_BIT: u8 = 0b0000_0001;
 #[derive(Debug)]
 pub struct Connect {
     pub connect_payload: ConnectPayload,
-    pub connect_flags: ConnectFlags,
     pub keep_alive_seconds: u16,
+    pub clean_session: bool,
+    pub last_will_retain: bool,
+    pub last_will_qos: bool,
 }
 
 impl Connect {
     pub fn new(
         connect_payload: ConnectPayload,
-        connect_flags: ConnectFlags,
         keep_alive_seconds: u16,
+        clean_session: bool,
+        last_will_retain: bool,
+        last_will_qos: bool
     ) -> Connect {
         Connect {
             connect_payload,
-            connect_flags,
             keep_alive_seconds,
+            clean_session,
+            last_will_retain,
+            last_will_qos,
         }
     }
 
     fn get_remaining_length(&self) -> Result<u32, String> {  
         //Variable header bytes + Payload bytes
         Ok(CONNECT_VARIABLE_HEADER_BYTES + self.connect_payload.length()?)
+    }
+
+    fn write_flags_to(&self, stream: &mut dyn Write) -> Result <(), Box<dyn std::error::Error>>{
+        let mut result_byte: u8 = 0b0000_0000;
+        if self.connect_payload.username.is_some() {
+            result_byte |= USERNAME_FLAG;
+        }
+        if self.connect_payload.password.is_some() {
+            result_byte |= PASSWORD_FLAG;
+        }
+        if self.last_will_retain {
+            result_byte |= LAST_WILL_RETAIN_FLAG;
+        }
+        if self.last_will_qos {
+            result_byte |= LAST_WILL_QOS_LSB_FLAG;
+        }
+        if self.connect_payload.last_will_message.is_some() {
+            result_byte |= LAST_WILL_FLAG;
+        }
+        if self.clean_session {
+            result_byte |= CLEAN_SESSION_FLAG;
+        }
+        // The LSB (Reserved) must be 0, so we set it to 0.
+        // As there is no QoS 2, the 4th bit is also set to 0.
+        stream.write(&[result_byte])?;
+        Ok(())
     }
 }
 
@@ -70,7 +102,7 @@ impl WritePacket for Connect {
         stream.write(&[CONNECT_PROTOCOL_LEVEL])?;
 
         // Escribimos los flags
-        self.connect_flags.write_to(stream)?;
+        self.write_flags_to(stream)?;
 
         let keep_alive_bytes = self.keep_alive_seconds.to_be_bytes();
         stream.write(&keep_alive_bytes)?;
@@ -109,11 +141,15 @@ impl ReadPacket for Connect {
 
         Ok(Packet::Connect(Connect::new(
             payload,
-            connect_flags,
             keep_alive_seconds,
+            connect_flags.clean_session,
+            connect_flags.last_will_retain,
+            connect_flags.last_will_qos
         )))
     }
 }
+
+
 
 fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
     let mqtt_string_bytes = encode_mqtt_string(&PROTOCOL_NAME)?;
@@ -167,7 +203,7 @@ fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), 
 
 /* ------------------------------------------- */
 #[derive(PartialEq, Debug)]
-pub struct ConnectFlags {
+struct ConnectFlags {
     pub username: bool,
     pub password: bool,
     last_will_retain: bool,
@@ -177,7 +213,7 @@ pub struct ConnectFlags {
 }
 
 impl ConnectFlags {
-    pub fn new(
+    fn new(
         username: bool,
         password: bool,
         last_will_retain: bool,
@@ -193,32 +229,6 @@ impl ConnectFlags {
             last_will_flag,
             clean_session,
         }
-    }
-
-    fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
-        let mut result_byte: u8 = 0b0000_0000;
-        if self.username {
-            result_byte |= USERNAME_FLAG;
-        }
-        if self.password {
-            result_byte |= PASSWORD_FLAG;
-        }
-        if self.last_will_retain {
-            result_byte |= LAST_WILL_RETAIN_FLAG;
-        }
-        if self.last_will_qos {
-            result_byte |= LAST_WILL_QOS_LSB_FLAG;
-        }
-        if self.last_will_flag {
-            result_byte |= LAST_WILL_FLAG;
-        }
-        if self.clean_session {
-            result_byte |= CLEAN_SESSION_FLAG;
-        }
-        // The LSB (Reserved) must be 0, so we set it to 0.
-        // As there is no QoS 2, the 4th bit is also set to 0.
-        stream.write(&[result_byte])?;
-        Ok(())
     }
 
     fn read_from(stream: &mut dyn Read) -> Result<ConnectFlags, Box<dyn std::error::Error>> {
@@ -451,8 +461,10 @@ mod tests {
                 Some("u".to_owned()),
                 Some("u".to_owned()),
             ),
-            ConnectFlags::new(true, true, true, true, true, true),
             60,
+            true,
+            true,
+            true,
         );
 
         let mut buff = Cursor::new(Vec::new());
@@ -461,9 +473,11 @@ mod tests {
         let to_test = Connect::read_from(&mut buff, 0x10).unwrap();
         if let Packet::Connect(to_test) = to_test {
             assert!(
-                to_test.connect_flags == connect_packet.connect_flags
-                    && to_test.connect_payload == connect_packet.connect_payload
+                    to_test.connect_payload == connect_packet.connect_payload
                     && to_test.keep_alive_seconds == 60
+                    && to_test.clean_session == true
+                    && to_test.last_will_retain == true
+                    && to_test.last_will_qos == true
             )
         }
     }
@@ -475,11 +489,13 @@ mod tests {
                 "u".to_owned(),
                 Some("u".to_owned()),
                 Some("u".to_owned()),
-                Some("u".to_owned()),
+                None,
                 Some("u".to_owned()),
             ),
-            ConnectFlags::new(false, true, true, true, true, true),
             60,
+            true,
+            true,
+            true,
         );
 
         let mut buff = Cursor::new(Vec::new());

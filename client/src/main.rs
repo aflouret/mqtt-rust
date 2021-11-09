@@ -1,6 +1,5 @@
 use crate::client::Client;
 use common::all_packets::connect::Connect;
-use common::all_packets::connect::ConnectFlags;
 use common::all_packets::connect::ConnectPayload;
 mod client;
 
@@ -15,8 +14,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some("u".to_owned()),
             Some("u".to_owned()),
         ),
-        ConnectFlags::new(false, false, false, false, false, false),
         60,
+        true,
+        true,
+        true,
     );
 
     client.client_run(connect_packet)?;
