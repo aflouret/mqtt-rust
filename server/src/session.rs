@@ -13,10 +13,12 @@ pub struct Session {
     not_fully_transmitted_messages: Vec<NotFullyTransmittedMessages>
 }
 
-pub struct ClientHandler {
+/*pub struct ClientHandler {
     //Maneja la conexion del socket
+    socket: TcpStream,//Option<Tcp>, cuando se desconecta queda en None
+    //Crea la sesion(socket)  -> Server,
     //Info al server
-}
+}*/
 
 impl Session {
     pub fn new(client_stream: TcpStream, packet_connect: Connect) -> Result<Session, Box<dyn std::error::Error>> {

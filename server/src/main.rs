@@ -7,6 +7,7 @@ use crate::server::Server;
 mod config;
 mod server;
 mod session;
+mod client_handler;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new();

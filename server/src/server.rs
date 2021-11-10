@@ -15,6 +15,7 @@ use common::all_packets::puback::Puback;
 pub struct Server {
     config: Config,
     clients: HashMap<String, Session>,
+    //channel - client_handler
 }
 //guardar sesion de un cliente
 impl Server {
@@ -32,7 +33,8 @@ impl Server {
         for stream in listener.incoming() {
             if let Ok(mut client_stream) = stream {
                 self.handle_client(client_stream)?;
-
+                //let client_hanlder = ClientHandler::new(client_stream) -> Session
+                //client_handler.handle_client()
             }
         }
 
