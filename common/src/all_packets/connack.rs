@@ -40,7 +40,7 @@ impl WritePacket for Connack {
 }
 
 impl ReadPacket for Connack {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
         println!("Entro a connack");
 
         let mut remaining_length_byte = [0u8; 1];

@@ -113,7 +113,7 @@ impl WritePacket for Connect {
 }
 
 impl ReadPacket for Connect {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
         let remaining_length = decode_remaining_length(stream)?;
 
         let mut remaining = vec![0u8; remaining_length as usize];

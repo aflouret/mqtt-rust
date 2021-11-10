@@ -38,7 +38,7 @@ impl WritePacket for Puback{
 }
 
 impl ReadPacket for Puback {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn Error>> {
+    fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn Error>> {
         let mut remaining_length_byte = [0u8; 1];
         stream.read_exact(&mut remaining_length_byte)?;
         verify_remaining_length_byte(&remaining_length_byte)?;
