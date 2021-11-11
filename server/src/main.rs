@@ -1,11 +1,18 @@
-fn main() {
-    println!("Hello, world!");
-}
+use common::all_packets::connack::Connack;
+use common::all_packets::connect::{Connect, ConnectPayload};
+use common::packet::Packet;
+use crate::config::Config;
+use crate::server::Server;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_sample_server() {
-        assert_eq!(1, 1)
-    }
+mod config;
+mod server;
+mod session;
+mod client_handler;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::new();
+    let server = Server::new(config)?;
+    server.server_run()?;
+
+    Ok(())
 }
