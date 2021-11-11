@@ -73,7 +73,7 @@ impl Connect {
         }
         // The LSB (Reserved) must be 0, so we set it to 0.
         // As there is no QoS 2, the 4th bit is also set to 0.
-        stream.write(&[result_byte])?;
+        stream.write_all(&[result_byte])?;
         Ok(())
     }
 }
@@ -170,9 +170,7 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
 }
 
 fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
-    if flags.last_will_flag == false
-        && (flags.last_will_retain || flags.last_will_qos )
-    {
+    if !flags.last_will_flag && (flags.last_will_retain || flags.last_will_qos ) {
         return Err("Last will flags invalidos".into());
     }
     if !flags.last_will_qos && flags.last_will_flag {
