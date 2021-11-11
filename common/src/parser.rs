@@ -62,12 +62,12 @@ pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
     let mut x = packet_length;
     loop {
         encoded_byte = x % 0x80;
-        x = x / 0x80;
+        x /= 0x80;
         if x > 0 {
-            encoded_byte = encoded_byte | 0x80;
+            encoded_byte |= 0x80;
         }
         vec.push(encoded_byte as u8);
-        if x <= 0 {
+        if x == 0 {
             break;
         }
     }

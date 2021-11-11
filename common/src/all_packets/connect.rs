@@ -82,30 +82,30 @@ impl WritePacket for Connect {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         // FIXED HEADER
         // Escribimos el packet type + los flags del packet type
-        stream.write(&[CONNECT_PACKET_TYPE])?;
+        stream.write_all(&[CONNECT_PACKET_TYPE])?;
 
         // Escribimos el remaining length
         let remaining_length = self.get_remaining_length();
         let remaining_length_encoded = encode_remaining_length(remaining_length?);
         for byte in remaining_length_encoded {
-            stream.write(&[byte])?;
+            stream.write_all(&[byte])?;
         }
 
         // VARIABLE HEADER
-        let encoded_protocol_name = encode_mqtt_string(&PROTOCOL_NAME)?;
+        let encoded_protocol_name = encode_mqtt_string(PROTOCOL_NAME)?;
 
         for byte in &encoded_protocol_name {
-            stream.write(&[*byte])?;
+            stream.write_all(&[*byte])?;
         }
 
         // Escribimos el protocol level 4
-        stream.write(&[CONNECT_PROTOCOL_LEVEL])?;
+        stream.write_all(&[CONNECT_PROTOCOL_LEVEL])?;
 
         // Escribimos los flags
         self.write_flags_to(stream)?;
 
         let keep_alive_bytes = self.keep_alive_seconds.to_be_bytes();
-        stream.write(&keep_alive_bytes)?;
+        stream.write_all(&keep_alive_bytes)?;
 
         self.connect_payload.write_to(stream)?;
         Ok(())
@@ -152,7 +152,7 @@ impl ReadPacket for Connect {
 
 
 fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
-    let mqtt_string_bytes = encode_mqtt_string(&PROTOCOL_NAME)?;
+    let mqtt_string_bytes = encode_mqtt_string(PROTOCOL_NAME)?;
     if mqtt_string_bytes != *bytes {
         return Err("No es MQTT".into());
     }
@@ -171,14 +171,14 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
 
 fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
     if flags.last_will_flag == false
-        && (flags.last_will_retain == true || flags.last_will_qos == true)
+        && (flags.last_will_retain || flags.last_will_qos )
     {
         return Err("Last will flags invalidos".into());
     }
-    if flags.last_will_qos == false && flags.last_will_flag == true {
+    if !flags.last_will_qos && flags.last_will_flag {
         return Err("Last will flags invalidos".into());
     }
-    if flags.username == false && flags.password == true {
+    if !flags.username && flags.password {
         return Err("Username y password flags invalidos".into());
     }
 
@@ -186,14 +186,14 @@ fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
 }
 
 fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), String> {
-    if (payload.username.is_some() && flags.username == false)
-        || (payload.username.is_none() && flags.username == true)
-        || (payload.password.is_some() && flags.password == false)
-        || (payload.password.is_none() && flags.password == true)
-        || (payload.last_will_message.is_some() && flags.last_will_flag == false)
-        || (payload.last_will_message.is_none() && flags.last_will_flag == true)
-        || (payload.last_will_topic.is_some() && flags.last_will_flag == false)
-        || (payload.last_will_topic.is_none() && flags.last_will_flag == true)
+    if (payload.username.is_some() && !flags.username)
+        || (payload.username.is_none() && flags.username)
+        || (payload.password.is_some() && !flags.password)
+        || (payload.password.is_none() && flags.password)
+        || (payload.last_will_message.is_some() && !flags.last_will_flag)
+        || (payload.last_will_message.is_none() && flags.last_will_flag)
+        || (payload.last_will_topic.is_some() && !flags.last_will_flag)
+        || (payload.last_will_topic.is_none() && flags.last_will_flag)
     {
         return Err("Payload invalido".into());
     }
@@ -319,14 +319,14 @@ impl ConnectPayload {
 
         let mut last_will_topic = None;
         let mut last_will_message = None;
-        if flags.last_will_flag == true {
+        if flags.last_will_flag {
             last_will_topic = Some(decode_mqtt_string(stream)?);
             last_will_message = Some(decode_mqtt_string(stream)?);
         }
 
         let mut username = None;
         let mut password = None;
-        if flags.username == true {
+        if flags.username {
             username = Some(decode_mqtt_string(stream)?);
             password = Some(decode_mqtt_string(stream)?);
         }
@@ -342,23 +342,23 @@ impl ConnectPayload {
 
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         let client_id_utf8 = encode_mqtt_string(&self.client_id)?;
-        stream.write(&client_id_utf8)?;
+        stream.write_all(&client_id_utf8)?;
 
         if let Some(string) = &self.last_will_topic {
             let last_will_topic_utf8 = encode_mqtt_string(string)?;
-            stream.write(&last_will_topic_utf8)?;
+            stream.write_all(&last_will_topic_utf8)?;
         }
         if let Some(string) = &self.last_will_message {
             let last_will_message_utf8 = encode_mqtt_string(string)?;
-            stream.write(&last_will_message_utf8)?;
+            stream.write_all(&last_will_message_utf8)?;
         }
         if let Some(string) = &self.username {
             let username_utf8 = encode_mqtt_string(string)?;
-            stream.write(&username_utf8)?;
+            stream.write_all(&username_utf8)?;
         }
         if let Some(string) = &self.password {
             let password_utf8 = encode_mqtt_string(string)?;
-            stream.write(&password_utf8)?;
+            stream.write_all(&password_utf8)?;
         }
 
         Ok(())

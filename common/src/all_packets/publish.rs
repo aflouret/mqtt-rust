@@ -48,32 +48,32 @@ impl WritePacket for Publish {
         (self.flags.duplicate as u8) << 3 | 
         (self.flags.qos_level as u8) << 1 |
         (self.flags.retain as u8);
-        stream.write(&[first_byte])?;
+        stream.write_all(&[first_byte])?;
         // Escribimos el remaining length
         let remaining_length = self.get_remaining_length();
         let remaining_length_encoded = encode_remaining_length(remaining_length?);
         for byte in remaining_length_encoded {
-            stream.write(&[byte])?;
+            stream.write_all(&[byte])?;
         }
 
         // VARIABLE HEADER
         // Escribimos el topic name
         let encoded_topic_name = encode_mqtt_string(&self.topic_name)?;
         for byte in &encoded_topic_name {
-            stream.write(&[*byte])?;
+            stream.write_all(&[*byte])?;
         }
 
         // Escribimos el packet id (si tiene)
         if let Some(packet_identifier) = self.packet_id {
             let packet_id_bytes = packet_identifier.to_be_bytes();
-            stream.write(&packet_id_bytes)?;
+            stream.write_all(&packet_id_bytes)?;
         }
 
         //PAYLOAD
         // Escribimos el mensaje
         let encoded_message = encode_mqtt_string(&self.application_message)?;
         for byte in &encoded_message {
-            stream.write(&[*byte])?;
+            stream.write_all(&[*byte])?;
         }
         println!("Escribo bien el publish");
         Ok(())
@@ -113,7 +113,7 @@ impl ReadPacket for Publish {
 }
 
 fn verify_publish_flags(flags: &PublishFlags) -> Result<(), String> {
-    if flags.qos_level == Qos::AtMostOnce && flags.duplicate == true {
+    if flags.qos_level == Qos::AtMostOnce && flags.duplicate {
         return Err("The DUP flag MUST be set to 0 for all QoS 0 messages".into());
     }
 

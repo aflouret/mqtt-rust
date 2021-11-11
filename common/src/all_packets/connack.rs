@@ -22,18 +22,18 @@ impl WritePacket for Connack {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         // FIXED HEADER
         // Escribimos el packet type + los flags del packet type
-        stream.write(&[CONNACK_PACKET_TYPE])?;
+        stream.write_all(&[CONNACK_PACKET_TYPE])?;
 
         // Escribimos el remaining length
-        stream.write(&[CONNACK_REMAINING_LENGTH])?;
+        stream.write_all(&[CONNACK_REMAINING_LENGTH])?;
 
         // VARIABLE HEADER
         // Escribimos el session present flag
         let session_present_flag = self.session_present as u8;
-        stream.write(&[session_present_flag])?;
+        stream.write_all(&[session_present_flag])?;
 
         // Escribimos el connect return code
-        stream.write(&[self.connect_return_code])?;
+        stream.write_all(&[self.connect_return_code])?;
 
         Ok(())
     }

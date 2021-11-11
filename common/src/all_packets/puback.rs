@@ -24,14 +24,14 @@ impl WritePacket for Puback{
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn Error>> {
         //FIXED HEADER
         //Escribimos el packet type
-        stream.write(&[PUBACK_PACKET_TYPE])?;
+        stream.write_all(&[PUBACK_PACKET_TYPE])?;
 
         //Escribimos el remaining length
-        stream.write(&[PUBACK_REMAINING_LENGTH])?;
+        stream.write_all(&[PUBACK_REMAINING_LENGTH])?;
 
         //VARIABLE HEADER
         let packet_id_from_publish = self.packet_id.to_be_bytes();
-        stream.write(&packet_id_from_publish)?;
+        stream.write_all(&packet_id_from_publish)?;
 
         Ok(())
     }
