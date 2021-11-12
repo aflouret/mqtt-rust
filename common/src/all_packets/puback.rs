@@ -33,6 +33,8 @@ impl WritePacket for Puback{
         let packet_id_from_publish = self.packet_id.to_be_bytes();
         stream.write_all(&packet_id_from_publish)?;
 
+        println!("Puback packet escrito correctamente");
+
         Ok(())
     }
 }
@@ -46,7 +48,8 @@ impl ReadPacket for Puback {
         let mut packet_id = [0u8; 2];
         stream.read_exact(&mut packet_id)?;
         let packet_id = u16::from_be_bytes(packet_id);
-        println!("Packet_id que devuelve puback es: {}", packet_id);
+
+        println!("Puback packet leido correctamente");
 
         Ok(Packet::Puback(Puback {
             packet_id,

@@ -35,32 +35,32 @@ impl WritePacket for Connack {
         // Escribimos el connect return code
         stream.write_all(&[self.connect_return_code])?;
 
+        println!("Connack packet escrito correctamente");
+
         Ok(())
     }
 }
 
 impl ReadPacket for Connack {
     fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
-        println!("Entro a connack");
-
         let mut remaining_length_byte = [0u8; 1];
         stream.read_exact(&mut remaining_length_byte)?;
         verify_remaining_length_byte(&remaining_length_byte)?;
-        println!("Remaining length leido: 2");
 
         let mut flags_byte = [0u8; 1];
         stream.read_exact(&mut flags_byte)?;
         verify_flags_byte(&flags_byte)?;
 
         let session_present = flags_byte[0] == 0x1;
-        println!("Session present leido: {}", session_present);
 
         let mut connect_return_byte = [0u8; 1];
         stream.read_exact(&mut connect_return_byte)?;
         let connect_return_code = connect_return_byte[0];
-        println!("Connect return code leido: {}", connect_return_code);
 
         verify_packet(session_present, connect_return_code)?;
+
+        println!("Connack packet leido correctamente");
+
         Ok(Packet::Connack(Connack {
             session_present,
             connect_return_code,
