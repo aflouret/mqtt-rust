@@ -11,11 +11,15 @@ use std::slice::SliceIndex;
 use std::thread::current;
 use common::all_packets::publish::Publish;
 use common::all_packets::puback::Puback;
+use crate::client_handler::{ClientHandlerReader, ClientHandlerWriter};
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
+use std::sync::{RwLock, Arc};
 
 pub struct Server {
     config: Config,
     clients: HashMap<String, Session>,
-    //channel - client_handler
 }
 //guardar sesion de un cliente
 impl Server {
@@ -30,15 +34,71 @@ impl Server {
 
         println!("Servidor escuchando en: {} ", &address);
 
+        let client_handlers = Arc::new(RwLock::new(HashMap::<u32, Sender<Packet>>::new()));
+
+        //crear channel: sv lee, client_handler's escriben
+        //rx se va a clonar en cada client_handler_reader
+        let (tx, rx) = mpsc::channel::<(u32, Packet)>();
+
+        //hilo -> loop { procesar_packet }
+        let client_handler_clone = client_handlers.clone();
+        let handler = thread::spawn(move || {
+            //recibe tupla (id, packet) -> buscar channel con el id y mandarselo a procesar
+            //procesar_packet(client_handler_clone);
+        });
+
+        let mut id: u32 = 0;
         for stream in listener.incoming() {
-            if let Ok(mut client_stream) = stream {
-                self.handle_client(client_stream)?;
-                //let client_hanlder = ClientHandler::new(client_stream) -> Session
-                //client_handler.handle_client()
+            if let Ok(client_stream) = stream {
+                //self.handle_client(client_stream)?;
+
+                //creas otro channel: sv escribe y client_handler lee
+                let (tx2, rx2) = mpsc::channel::<Packet>();
+                let mut client_handler_writer = ClientHandlerWriter::new(id, Some(client_stream.try_clone()?), rx2);
+                let mut client_handler_reader = ClientHandlerReader::new(id, Some(client_stream), tx.clone());
+
+
+                //guardar client_handler_writer y su id en hash
+                let mut hash = client_handlers.write().unwrap();
+                hash.insert(id, tx2);
+                id += 1;
+                
+                //Guardar handlers en vector??
+                //hilo -> client_handler_reader to sv
+                let handler_reader = thread::spawn(move || {
+                    client_handler_reader.receive_packet().unwrap();
+                });
+                //hilo -> sv to client_handler_writer
+                let handler_writer = thread::spawn(move || {
+                    client_handler_writer.send_packet().unwrap();
+                });
             }
         }
 
+        handler.join();
+
         Ok(())
+    }
+
+    fn process_packet(receiver: Receiver<(u32, Packet)>, client_handlers: Arc<RwLock<HashMap<u32, Sender<Packet>>>>) -> Result<(), Box<dyn std::error::Error>>{
+        loop {
+            //lee packet del channel
+            let (id, packet) = receiver.recv()?;
+        
+            //match al tipo de packet 
+            let response_packet = match packet {
+                Packet::Connect(connect_packet) => {
+                    //handle_connect_packet(connect_packet)?;
+                    let hash = client_handlers.read().unwrap();
+                    hash.get(&id);
+                }
+                Packet::Publish(publish_packet) => {
+                    //self.handle_publish_packet(publish_packet)?;
+                },
+                _ => { return Err("Invalid packet".into()) },
+            };
+           
+        }
     }
 
     // Leemos y escribimos packets, etc.
