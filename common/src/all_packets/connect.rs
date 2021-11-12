@@ -108,6 +108,9 @@ impl WritePacket for Connect {
         stream.write_all(&keep_alive_bytes)?;
 
         self.connect_payload.write_to(stream)?;
+
+        println!("Connect packet escrito correctamente");
+
         Ok(())
     }
 }
@@ -138,6 +141,8 @@ impl ReadPacket for Connect {
         //Payload: order Client Identifier, Will Topic, Will Message, User Name, Password
         let payload = ConnectPayload::read_from(&mut remaining_bytes, &connect_flags)?;
         verify_payload(&connect_flags, &payload)?;
+
+        println!("Connect packet leido correctamente");
 
         Ok(Packet::Connect(Connect::new(
             payload,

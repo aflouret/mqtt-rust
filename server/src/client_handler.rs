@@ -27,16 +27,32 @@ impl ClientHandlerWriter{
     pub fn send_packet(&mut self) -> Result<(), Box<dyn std::error::Error>>{
         let received = self.receiver.recv()?;
         
+        /* TODO: los packets, al ser polimorficos, deberiamos poder hacer received.write_to(socket)
+             en vez de hacer el match. Algo asi: (hay que hacer algunas cositas)
+
+        if let Ok(packet) = self.receiver.recv() {
+            packet.write_to(socket)?;
+        }
+        */
+
         match received {
-            Packet::Connect(connect) => {
+            Packet::Connack(connack) => {
                 if let Some(socket) = &mut self.socket{
-                    connect.write_to(socket)?;
+                    println!("Se manda el connack...");
+                    connack.write_to(socket)?;
+                }
+            }
+
+            Packet::Puback(puback) => {
+                if let Some(socket) = &mut self.socket{
+                    println!("Se manda el puback...");
+                    puback.write_to(socket)?;
                 }
             }
 
             //...
             
-            _ => println!("hola")
+            _ => println!("Packet desconocido")
         }
 
         Ok(())
@@ -61,12 +77,11 @@ impl ClientHandlerReader{
     }
 
     pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error>>{
-        loop {
-            if let Some(socket) = &mut self.socket{
-                let packet = parser::read_packet(socket)?;
-                // mandar tupla (id, packet)
-                self.sender.send((self.id, packet))?;
-            }
+        if let Some(socket) = &mut self.socket{
+            let packet = parser::read_packet(socket)?;
+            // mandar tupla (id, packet)
+            self.sender.send((self.id, packet))?;
         }
+        Ok(())
     }
 }

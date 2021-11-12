@@ -8,7 +8,6 @@ use std::io;
 use std::net::{TcpListener, TcpStream};
 use std::collections::HashMap;
 use std::slice::SliceIndex;
-use std::thread::current;
 use common::all_packets::publish::Publish;
 use common::all_packets::puback::Puback;
 use crate::client_handler::{ClientHandlerReader, ClientHandlerWriter};
@@ -36,7 +35,8 @@ impl Server {
         
         // En este hash guardaremos los Senders correspondientes a cada Receiver en los
         // client_handler_readers, para recibir los packets que se lean desde ahí
-        let client_handler_senders = Arc::new(RwLock::new(HashMap::<u32, Arc<Mutex<Sender<Packet>>>>::new()));
+        // NOTA: c_h = "client_handler"
+        let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<u32, Arc<Mutex<Sender<Packet>>>>::new()));
 
         // El channel desde el cual, desde cada cliente, enviaremos los packets recién
         // leidos al server. O sea, el server tendrá el rx, y cada client_handler_reader
@@ -47,11 +47,11 @@ impl Server {
 
         // Thread encargado de leer packets del channel creado arriba y procesarlos
         // TODO: sacar unwraps del thread
-        let client_handler_senders_clone = client_handler_senders.clone();
+        let senders_to_c_h_writers_clone = senders_to_c_h_writers.clone();
         let packet_processor_handler = thread::spawn(move || {
             loop {
                 let (id, packet) = server_rx.recv().unwrap();
-                let senders_hash = client_handler_senders_clone.read().unwrap();
+                let senders_hash = senders_to_c_h_writers_clone.read().unwrap();
                 let sender = senders_hash.get(&id).unwrap();
                 let sender_mutex_guard = sender.lock().unwrap();
                 self.process_packet(packet, sender_mutex_guard);
@@ -72,7 +72,7 @@ impl Server {
 
 
                 // Guardamos el client_handler_writer y su id en el hash
-                let mut hash = client_handler_senders.write().unwrap();
+                let mut hash = senders_to_c_h_writers.write().unwrap();
                 hash.insert(id, Arc::new(Mutex::new(server_tx)));
                 id += 1;
                 
@@ -101,16 +101,16 @@ impl Server {
         Ok(())
     }
 
-    fn process_packet(&self, packet: Packet, sender: MutexGuard<Sender<Packet>>) -> Result<(), Box<dyn std::error::Error>> {    
+    fn process_packet(&self, packet: Packet, sender_to_c_h_writer: MutexGuard<Sender<Packet>>) -> Result<(), Box<dyn std::error::Error>> {    
         let response_packet = match packet {
                 Packet::Connect(connect_packet) => {
                     println!("Recibi el Connect (en process_pracket)");
-                    //self.handle_connect_packet(connect_packet)?;
-                    // TODO: enviar connack usando "sender"
+                    //TODO: self.handle_connect_packet(connect_packet)?;
+                    sender_to_c_h_writer.send(common::packet::Packet::Connack(Connack::new(false,1)))?;
                 }
                 Packet::Publish(publish_packet) => {
-                    //self.handle_publish_packet(publish_packet)?;
-                    // TODO: enviar puback usando "sender"
+                    //TODO: self.handle_publish_packet(publish_packet)?;
+                    sender_to_c_h_writer.send(common::packet::Packet::Puback(Puback::new(1)))?;
                 },
                 _ => { return Err("Invalid packet".into()) },
             };
