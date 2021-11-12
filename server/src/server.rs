@@ -12,7 +12,7 @@ use std::thread::current;
 use common::all_packets::publish::Publish;
 use common::all_packets::puback::Puback;
 use crate::client_handler::{ClientHandlerReader, ClientHandlerWriter};
-use std::sync::{Mutex, mpsc};
+use std::sync::{Mutex, MutexGuard, mpsc};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::sync::{RwLock, Arc};
@@ -36,7 +36,7 @@ impl Server {
         
         // En este hash guardaremos los Senders correspondientes a cada Receiver en los
         // client_handler_readers, para recibir los packets que se lean desde ahí
-        let client_handler_senders = Arc::new(RwLock::new(HashMap::<u32, Sender<Packet>>::new()));
+        let client_handler_senders = Arc::new(RwLock::new(HashMap::<u32, Arc<Mutex<Sender<Packet>>>>::new()));
 
         // El channel desde el cual, desde cada cliente, enviaremos los packets recién
         // leidos al server. O sea, el server tendrá el rx, y cada client_handler_reader
@@ -51,10 +51,11 @@ impl Server {
         let packet_processor_handler = thread::spawn(move || {
             loop {
                 let (id, packet) = server_rx.recv().unwrap();
-                let sender = client_handler_senders_clone.read().unwrap().get(&id).unwrap();
-                self.process_packet(packet, sender);
+                let senders_hash = client_handler_senders_clone.read().unwrap();
+                let sender = senders_hash.get(&id).unwrap();
+                let sender_mutex_guard = sender.lock().unwrap();
+                self.process_packet(packet, sender_mutex_guard);
             }
-            //self.process_packet(server_rx, client_handler_senders_clone);
         });
 
         let mut id: u32 = 0;
@@ -72,7 +73,7 @@ impl Server {
 
                 // Guardamos el client_handler_writer y su id en el hash
                 let mut hash = client_handler_senders.write().unwrap();
-                hash.insert(id, server_tx);
+                hash.insert(id, Arc::new(Mutex::new(server_tx)));
                 id += 1;
                 
                 //Guardar handlers en vector??
@@ -100,10 +101,10 @@ impl Server {
         Ok(())
     }
 
-    fn process_packet(&self, packet: Packet, sender: &Sender<Packet>) -> Result<(), Box<dyn std::error::Error>> {    
-        println!("estamos en process_packet");
+    fn process_packet(&self, packet: Packet, sender: MutexGuard<Sender<Packet>>) -> Result<(), Box<dyn std::error::Error>> {    
         let response_packet = match packet {
                 Packet::Connect(connect_packet) => {
+                    println!("Recibi el Connect (en process_pracket)");
                     //self.handle_connect_packet(connect_packet)?;
                     // TODO: enviar connack usando "sender"
                 }
@@ -115,27 +116,6 @@ impl Server {
             };
         Ok(())
     }
-
-    // fn process_packet(&self, receiver: Receiver<(u32, Packet)>, client_handlers: Arc<RwLock<HashMap<u32, Sender<Packet>>>>) -> Result<(), Box<dyn std::error::Error>>{
-    //     loop {
-    //         //lee packet del channel
-    //         let (id, packet) = receiver.recv()?;
-        
-    //         //match al tipo de packet 
-    //         let response_packet = match packet {
-    //             Packet::Connect(connect_packet) => {
-    //                 //handle_connect_packet(connect_packet)?;
-    //                 let hash = client_handlers.read().unwrap();
-    //                 hash.get(&id);
-    //             }
-    //             Packet::Publish(publish_packet) => {
-    //                 //self.handle_publish_packet(publish_packet)?;
-    //             },
-    //             _ => { return Err("Invalid packet".into()) },
-    //         };
-           
-    //     }
-    // }
 
     // Leemos y escribimos packets, etc.
     fn handle_client(&mut self, mut client_stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
