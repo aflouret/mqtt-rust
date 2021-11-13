@@ -7,16 +7,16 @@ use std::io::{Read, Write};
 use common::parser;
 
 //LEE EN CHANNEL, ESCRIBE EN SOCKET
-pub struct ClientHandlerWriter{
+pub struct ClientHandlerWriter {
     //Maneja la conexion del socket
     id: u32,
-    socket: Option<TcpStream>, //Option<Tcp>, cuando se desconecta queda en None
-    receiver: Receiver<Packet>, //Por acá recibe los paquetes que escribe en el socket
+    socket: TcpStream,
+    //TODO:Option<Tcp> -> CONSULTAR:no iria porque  si se desconecta se destruye el client_handler
+    receiver: Receiver<Result<Packet, Box<dyn std::error::Error>>>, //Por acá recibe los paquetes que escribe en el socket
 }
 
-impl ClientHandlerWriter{
-    pub fn new(id: u32, socket: Option<TcpStream>, receiver: Receiver<Packet>) -> ClientHandlerWriter {
-
+impl ClientHandlerWriter {
+    pub fn new(id: u32, socket: TcpStream, receiver: Receiver<Result<Packet, Box<dyn std::error::Error>>>) -> ClientHandlerWriter {
         ClientHandlerWriter {
             id,
             socket,
@@ -24,9 +24,9 @@ impl ClientHandlerWriter{
         }
     }
 
-    pub fn send_packet(&mut self) -> Result<(), Box<dyn std::error::Error>>{
-        let received = self.receiver.recv()?;
-        
+    pub fn send_packet(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let received = self.receiver.recv()??;
+
         /* TODO: los packets, al ser polimorficos, deberiamos poder hacer received.write_to(socket)
              en vez de hacer el match. Algo asi: (hay que hacer algunas cositas)
 
@@ -37,21 +37,17 @@ impl ClientHandlerWriter{
 
         match received {
             Packet::Connack(connack) => {
-                if let Some(socket) = &mut self.socket{
-                    println!("Se manda el connack...");
-                    connack.write_to(socket)?;
-                }
+                println!("Se manda el connack...");
+                connack.write_to(&mut self.socket)?;
             }
 
             Packet::Puback(puback) => {
-                if let Some(socket) = &mut self.socket{
-                    println!("Se manda el puback...");
-                    puback.write_to(socket)?;
-                }
+                println!("Se manda el puback...");
+                puback.write_to(&mut self.socket)?;
             }
 
             //...
-            
+
             _ => println!("Packet desconocido")
         }
 
@@ -60,15 +56,16 @@ impl ClientHandlerWriter{
 }
 
 //LEE DE SOCKET, ESCRIBE EN CHANNEL
-pub struct ClientHandlerReader{
+pub struct ClientHandlerReader {
     //Maneja la conexion del socket
     id: u32,
-    socket: Option<TcpStream>,
-    sender: Sender<(u32, Packet)>, //Por acá manda paquetes al sv
+    socket: TcpStream,
+    //TODO:Option<Tcp> -> CONSULTAR:no iria porque  si se desconecta se destruye el client_handler
+    sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error>>)>,//Por acá manda paquetes al sv
 }
 
-impl ClientHandlerReader{
-    pub fn new(id: u32, socket: Option<TcpStream>, sender: Sender<(u32, Packet)>) -> ClientHandlerReader {
+impl ClientHandlerReader {
+    pub fn new(id: u32, socket: TcpStream, sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error>>)>) -> ClientHandlerReader {
         ClientHandlerReader {
             id,
             socket,
@@ -76,12 +73,11 @@ impl ClientHandlerReader{
         }
     }
 
-    pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error>>{
-        if let Some(socket) = &mut self.socket{
-            let packet = parser::read_packet(socket)?;
-            // mandar tupla (id, packet)
-            self.sender.send((self.id, packet))?;
-        }
+    pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let packet = parser::read_packet(&mut self.socket);
+        // mandar tupla (id, packet)
+        self.sender.send((self.id, packet));
+
         Ok(())
     }
 }

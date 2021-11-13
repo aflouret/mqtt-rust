@@ -7,6 +7,7 @@ use common::parser;
 use std::io;
 use std::net::{TcpListener, TcpStream};
 use std::collections::HashMap;
+use std::error::Error;
 use std::slice::SliceIndex;
 use common::all_packets::publish::Publish;
 use common::all_packets::puback::Puback;
@@ -17,7 +18,10 @@ use std::thread;
 use std::sync::{RwLock, Arc};
 
 pub struct Server {
+    //port
+    //addres
     config: Config,
+    //client_id depende del connect
     clients: HashMap<String, Session>,
 }
 //guardar sesion de un cliente
@@ -36,14 +40,14 @@ impl Server {
         // En este hash guardaremos los Senders correspondientes a cada Receiver en los
         // client_handler_readers, para recibir los packets que se lean desde ahí
         // NOTA: c_h = "client_handler"
-        let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<u32, Arc<Mutex<Sender<Packet>>>>::new()));
+        let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error>>>>>>::new()));
 
         // El channel desde el cual, desde cada cliente, enviaremos los packets recién
         // leidos al server. O sea, el server tendrá el rx, y cada client_handler_reader
         // tendrá una copia del tx.
         // NOTA: el nombre antes de "_tx" o "_rx" indica quién es el que tendrá el ownership 
         // de ese extremo del channel
-        let (c_h_reader_tx, server_rx) = mpsc::channel::<(u32, Packet)>();
+        let (c_h_reader_tx, server_rx) = mpsc::channel::<(u32, Result<Packet, Box<dyn std::error::Error>>)>();
 
         // Thread encargado de leer packets del channel creado arriba y procesarlos
         // TODO: sacar unwraps del thread
@@ -54,7 +58,8 @@ impl Server {
                 let senders_hash = senders_to_c_h_writers_clone.read().unwrap();
                 let sender = senders_hash.get(&id).unwrap();
                 let sender_mutex_guard = sender.lock().unwrap();
-                self.process_packet(packet, sender_mutex_guard);
+                let p = packet.unwrap();
+                self.process_packet(p, sender_mutex_guard);
             }
         });
 
@@ -65,10 +70,10 @@ impl Server {
 
                 // Channel que tiene el server con solo este cliente. Desde el server 
                 // enviaremos los packets que queremos enviarle a dicho cliente
-                let (server_tx, c_h_writer_rx) = mpsc::channel::<Packet>();
+                let (server_tx, c_h_writer_rx) = mpsc::channel::<Result<Packet, Box<dyn std::error::Error>>>();
                 
-                let mut client_handler_writer = ClientHandlerWriter::new(id, Some(client_stream.try_clone()?), c_h_writer_rx);
-                let mut client_handler_reader = ClientHandlerReader::new(id, Some(client_stream), c_h_reader_tx.clone());
+                let mut client_handler_writer = ClientHandlerWriter::new(id, client_stream.try_clone()?, c_h_writer_rx);
+                let mut client_handler_reader = ClientHandlerReader::new(id, client_stream, c_h_reader_tx.clone());
 
 
                 // Guardamos el client_handler_writer y su id en el hash
@@ -101,16 +106,16 @@ impl Server {
         Ok(())
     }
 
-    fn process_packet(&self, packet: Packet, sender_to_c_h_writer: MutexGuard<Sender<Packet>>) -> Result<(), Box<dyn std::error::Error>> {    
+    fn process_packet(&self, packet: Packet, sender_to_c_h_writer: MutexGuard<Sender<Result<Packet, Box<dyn Error>>>>) -> Result<(), Box<dyn std::error::Error>> {
         let response_packet = match packet {
                 Packet::Connect(connect_packet) => {
                     println!("Recibi el Connect (en process_pracket)");
-                    //TODO: self.handle_connect_packet(connect_packet)?;
-                    sender_to_c_h_writer.send(common::packet::Packet::Connack(Connack::new(false,1)))?;
+                    //TODO: self.handle_connect_packet(connect_packet)?; //la respuesta la manda el handle_connect?
+                    sender_to_c_h_writer.send(Ok(common::packet::Packet::Connack(Connack::new(false,1))));
                 }
                 Packet::Publish(publish_packet) => {
                     //TODO: self.handle_publish_packet(publish_packet)?;
-                    sender_to_c_h_writer.send(common::packet::Packet::Puback(Puback::new(1)))?;
+                    sender_to_c_h_writer.send(Ok(common::packet::Packet::Puback(Puback::new(1))));
                 },
                 _ => { return Err("Invalid packet".into()) },
             };

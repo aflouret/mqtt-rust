@@ -83,7 +83,7 @@ fn verify_remaining_length_byte(byte: &[u8; 1]) -> Result<(), String> {
 }
 
 fn verify_packet(session_present_flag: bool, connect_return_code: u8) -> Result<(), String> {
-    if connect_return_code != 0 && session_present_flag {
+    if connect_return_code != 0 && session_present_flag    {
         return Err("Session present debe valer 0".into());
     }
     Ok(())
