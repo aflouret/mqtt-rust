@@ -11,7 +11,7 @@ use std::net::TcpStream;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use crate::client_handler::ClientHandler;
+use crate::client_controller::ClientController;
 
 pub struct Client {
     client_id: String,
@@ -33,7 +33,7 @@ impl Client {
     }
 
     pub fn client_run(&mut self, connect_packet: Connect,
-    ) -> Result<(), Box<dyn std::error::Error + '_>> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
 
         // handle connection,
         if let Some(socket_writer) =  &mut self.server_stream {
@@ -53,7 +53,7 @@ impl Client {
 
             //Escritura -- este thread va a quedar deprecado y solo usamos el thread de abajo que esta conectado
             //al client_handler,
-            let handler_write = thread::spawn(move ||  {
+/*            let handler_write = thread::spawn(move ||  {
                 loop {
                     println!("Entro al thread de escritura");
                     let publish_packet = Publish::new(
@@ -67,16 +67,16 @@ impl Client {
                     println!("Se envio el publish");
                     thread::sleep(Duration::from_millis(3000));
                 }
-            });
+            });*/
 
             //Si la clonacion del socket estuvo Ok, creamos el clientHandler con el channel
-            let (client_handler_sender, receiver_n) = mpsc::channel::<Packet>();
+            let (client_controller_sender, receiver_n) = mpsc::channel::<Packet>();
             //receiver_from_ch = Some(receiver);
-            let ch = ClientHandler::new(client_handler_sender);
+            let ch = ClientController::new(client_controller_sender);
             let handler_from_ch = thread::spawn(move || {
                 //if let Some(receiver_n) = &mut self.receiver_from_ch {
                     loop {
-                        let mut packet = receiver_n.recv().unwrap();
+                        let packet = receiver_n.recv().unwrap();
                         //detectar que paquete es - process_packet cliente
                         match packet {
                             Packet::Connect(connect) => connect.write_to(&mut server_stream_write),
@@ -99,8 +99,9 @@ impl Client {
                 }
             });
 
-            handler_write.join().unwrap();
+            //handler_write.join().unwrap();
             handler_read.join().unwrap();
+            handler_from_ch.join().unwrap();
         }
 
         Ok(())

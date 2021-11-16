@@ -108,9 +108,7 @@ impl WritePacket for Connect {
         stream.write_all(&keep_alive_bytes)?;
 
         self.connect_payload.write_to(stream)?;
-
-        println!("Connect packet escrito correctamente");
-
+        
         Ok(())
     }
 }

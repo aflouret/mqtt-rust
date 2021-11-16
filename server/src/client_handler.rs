@@ -12,11 +12,11 @@ pub struct ClientHandlerWriter {
     id: u32,
     socket: TcpStream,
     //TODO:Option<Tcp> -> CONSULTAR:no iria porque  si se desconecta se destruye el client_handler
-    receiver: Receiver<Result<Packet, Box<dyn std::error::Error>>>, //Por acá recibe los paquetes que escribe en el socket
+    receiver: Receiver<Result<Packet,Box<dyn std::error::Error + Send>>>, //Por acá recibe los paquetes que escribe en el socket
 }
 
 impl ClientHandlerWriter {
-    pub fn new(id: u32, socket: TcpStream, receiver: Receiver<Result<Packet, Box<dyn std::error::Error>>>) -> ClientHandlerWriter {
+    pub fn new(id: u32, socket: TcpStream, receiver: Receiver<Result<Packet,Box<dyn std::error::Error + Send>>>) -> ClientHandlerWriter {
         ClientHandlerWriter {
             id,
             socket,
@@ -25,7 +25,7 @@ impl ClientHandlerWriter {
     }
 
     pub fn send_packet(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let received = self.receiver.recv()??;
+        let received = self.receiver.recv()?;
 
         /* TODO: los packets, al ser polimorficos, deberiamos poder hacer received.write_to(socket)
              en vez de hacer el match. Algo asi: (hay que hacer algunas cositas)
@@ -36,12 +36,12 @@ impl ClientHandlerWriter {
         */
 
         match received {
-            Packet::Connack(connack) => {
+            Ok(Packet::Connack(connack)) => {
                 println!("Se manda el connack...");
                 connack.write_to(&mut self.socket)?;
             }
 
-            Packet::Puback(puback) => {
+            Ok(Packet::Puback(puback)) => {
                 println!("Se manda el puback...");
                 puback.write_to(&mut self.socket)?;
             }
@@ -61,11 +61,11 @@ pub struct ClientHandlerReader {
     id: u32,
     socket: TcpStream,
     //TODO:Option<Tcp> -> CONSULTAR:no iria porque  si se desconecta se destruye el client_handler
-    sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error>>)>,//Por acá manda paquetes al sv
+    sender: Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,//Por acá manda paquetes al sv
 }
 
 impl ClientHandlerReader {
-    pub fn new(id: u32, socket: TcpStream, sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error>>)>) -> ClientHandlerReader {
+    pub fn new(id: u32, socket: TcpStream, sender: Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>) -> ClientHandlerReader {
         ClientHandlerReader {
             id,
             socket,
@@ -73,11 +73,19 @@ impl ClientHandlerReader {
         }
     }
 
-    pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let packet = parser::read_packet(&mut self.socket);
-        // mandar tupla (id, packet)
-        self.sender.send((self.id, packet));
+    pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error>>{
+       //if let Some(socket) = &mut self.socket{
+            let packet = parser::read_packet(&mut self.socket)?;
+            // mandar tupla (id, packet)
+            self.sender.send((self.id, Ok(packet)))?;
 
         Ok(())
     }
+
+/*        let packet = parser::read_packet(&mut self.socket);
+        // mandar tupla (id, packet)
+        self.sender.send((self.id, packet))?;
+
+        Ok(())*/
+
 }
