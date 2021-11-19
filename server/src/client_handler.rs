@@ -73,12 +73,13 @@ impl ClientHandlerReader {
         }
     }
 
-    pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error>>{
-       //if let Some(socket) = &mut self.socket{
-            let packet = parser::read_packet(&mut self.socket)?;
-            // mandar tupla (id, packet)
-            self.sender.send((self.id, Ok(packet)))?;
-
+    pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error + Send>>{
+            if let Ok(packet) = parser::read_packet(&mut self.socket) {
+                
+                if let Err(error) = self.sender.send((self.id, Ok(packet))) {
+                    return Err(Box::new(error));
+                }
+            }
         Ok(())
     }
 
