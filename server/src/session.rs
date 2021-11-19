@@ -5,47 +5,41 @@ use common::packet::Packet;
 
 //Manjea datos del cliente
 pub struct Session {
-    socket: TcpStream,//Option<Tcp>, cuando se desconecta queda en None
+    client_handler_id: Option<u32>,
+    client_data: ClientData,
     client_packets: Vec<Packet>,
-    client: ClientData,
-    pub is_active: bool,
     client_subscriptions: Vec<Subscription>,
     not_fully_transmitted_messages: Vec<NotFullyTransmittedMessages>
 }
 
 impl Session {
-    pub fn new(client_stream: TcpStream, packet_connect: Connect) -> Result<Session, Box<dyn std::error::Error>> {
+    pub fn new(client_handler_id: u32, packet_connect: Connect) -> Result<Session, Box<dyn std::error::Error>> {
         let client_data = parse_connect_data(packet_connect);
 
         Ok(Session {
-            socket: client_stream,
+            client_handler_id: Some(client_handler_id),
+            client_data,
             client_packets: vec![],
-            client: client_data,
-            is_active: false,
             client_subscriptions: vec![],
             not_fully_transmitted_messages: vec![],
             
         })
     }
 
-    pub fn get_socket(&mut self) -> &mut TcpStream {
-        &mut self.socket
-    }
-
     pub fn get_client_id(&self) -> &String {
-        &self.client.client_id
+        &self.client_data.client_id
     }
 
     pub fn is_active(&self) -> bool {
-        self.is_active
+        self.client_handler_id.is_some()
     }
 
-    pub fn connect(&mut self) {
-        self.is_active = true;
+    pub fn connect(&mut self, client_handler_id: u32) {
+        self.client_handler_id = Some(client_handler_id);
     }
 
     pub fn disconnect(&mut self) {
-        self.is_active = false;
+        self.client_handler_id = None;
     }
 }
 

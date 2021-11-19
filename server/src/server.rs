@@ -29,10 +29,11 @@ impl Server {
         let (c_h_reader_tx, server_rx) = mpsc::channel::<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>();
 
         let packet_processor = PacketProcessor::new(server_rx, senders_to_c_h_writers.clone());
-        packet_processor.run()?;
+        let packet_processor_join_handle = packet_processor.run();
 
         self.handle_connections(listener, senders_to_c_h_writers, c_h_reader_tx);
         
+        packet_processor_join_handle.join().unwrap();
         Ok(())
     }
 
