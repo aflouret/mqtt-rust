@@ -2,7 +2,7 @@ use std::net::TcpStream;
 use common::packet::{Packet, WritePacket};
 use common::parser;
 use std::sync::{Mutex, mpsc};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use std::collections::HashMap;
@@ -10,22 +10,21 @@ use std::collections::HashMap;
 pub struct ClientHandler {
     id: u32,
     stream: Option<TcpStream>,
-    sender: Option<Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>>,
-    receiver: Option<Receiver<Result<Packet,Box<dyn std::error::Error + Send>>>>,
+    sender: Option<Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>>,
+    receiver: Option<Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>>,
 }
 
 impl ClientHandler {
     pub fn new(
-        id: u32, 
-        stream: TcpStream, 
-        senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
-        sender:Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
+        id: u32,
+        stream: TcpStream,
+        senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>>>,
+        sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
     ) -> ClientHandler {
-        
-        let (server_tx, c_h_writer_rx) = mpsc::channel::<Result<Packet,Box<dyn std::error::Error + Send>>>();
+        let (server_tx, c_h_writer_rx) = mpsc::channel::<Result<Packet, Box<dyn std::error::Error + Send>>>();
         let mut hash = senders_to_c_h_writers.write().unwrap();
         hash.insert(id, Arc::new(Mutex::new(server_tx)));
-        
+
         ClientHandler {
             id,
             stream: Some(stream),
@@ -34,8 +33,7 @@ impl ClientHandler {
         }
     }
 
-    pub fn run(mut self) -> Result<JoinHandle<()>, Box<dyn std::error::Error>>{
-
+    pub fn run(mut self) -> Result<JoinHandle<()>, Box<dyn std::error::Error>> {
         let stream = self.stream.take().unwrap();
 
 
@@ -54,16 +52,19 @@ impl ClientHandler {
                 loop {
                     let result = client_handler_reader.receive_packet();
                     if result.is_err() {
+                        //Ver como detectar cuando uun cliente se desconecta
+                        println!("Client Disconnect");
                         error_tx.send(result).unwrap();
                         break;
                     }
                     error_tx.send(Ok(())).unwrap();
                 }
             });
-            
+
             loop {
                 if let Ok(result) = error_rx.try_recv() {
                     if result.is_err() {
+                        println!("Writter recibe client disconnect");
                         break;
                     }
                 }
@@ -83,11 +84,11 @@ struct ClientHandlerWriter {
     //Maneja la conexion del socket
     socket: TcpStream,
     //TODO:Option<Tcp> -> CONSULTAR:no iria porque  si se desconecta se destruye el client_handler
-    receiver: Receiver<Result<Packet,Box<dyn std::error::Error + Send>>>, //Por acá recibe los paquetes que escribe en el socket
+    receiver: Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>, //Por acá recibe los paquetes que escribe en el socket
 }
 
 impl ClientHandlerWriter {
-    pub fn new(socket: TcpStream, receiver: Receiver<Result<Packet,Box<dyn std::error::Error + Send>>>) -> ClientHandlerWriter {
+    pub fn new(socket: TcpStream, receiver: Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>) -> ClientHandlerWriter {
         ClientHandlerWriter {
             socket,
             receiver,
@@ -129,11 +130,11 @@ impl ClientHandlerWriter {
 struct ClientHandlerReader {
     id: u32,
     socket: TcpStream,
-    sender: Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,//Por acá manda paquetes al sv
+    sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,//Por acá manda paquetes al sv
 }
 
 impl ClientHandlerReader {
-    pub fn new(id: u32, socket: TcpStream, sender: Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>) -> ClientHandlerReader {
+    pub fn new(id: u32, socket: TcpStream, sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>) -> ClientHandlerReader {
         ClientHandlerReader {
             id,
             socket,
@@ -141,20 +142,20 @@ impl ClientHandlerReader {
         }
     }
 
-    pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error + Send>>{
-            if let Ok(packet) = parser::read_packet(&mut self.socket) {
-                
-                if let Err(error) = self.sender.send((self.id, Ok(packet))) {
-                    return Err(Box::new(error));
-                }
-            }
+    pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
+        match parser::read_packet(&mut self.socket) {
+            Ok(packet) => if let Err(error) = self.sender.send((self.id, Ok(packet))) {
+                return Err(Box::new(error));
+            },
+            Err(error) => return Err(Box::new(SendError("Socket Disconnect"))),
+        }
+
         Ok(())
     }
 
-/*        let packet = parser::read_packet(&mut self.socket);
-        // mandar tupla (id, packet)
-        self.sender.send((self.id, packet))?;
+    /*        let packet = parser::read_packet(&mut self.socket);
+            // mandar tupla (id, packet)
+            self.sender.send((self.id, packet))?;
 
-        Ok(())*/
-
+            Ok(())*/
 }

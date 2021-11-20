@@ -51,29 +51,11 @@ impl Client {
             let mut server_stream_write = socket.try_clone()?;
             let mut server_stream_read = socket.try_clone()?;
 
-            //Escritura -- este thread va a quedar deprecado y solo usamos el thread de abajo que esta conectado
-            //al client_handler,
-/*            let handler_write = thread::spawn(move ||  {
-                loop {
-                    println!("Entro al thread de escritura");
-                    let publish_packet = Publish::new(
-                        PublishFlags::new(0b0100_1011),
-                        "Topic".to_string(),
-                        Some(15),
-                        "Message".to_string(),
-                    );
-                    //mpsc - channel -
-                    publish_packet.write_to(&mut server_stream_write).unwrap();
-                    println!("Se envio el publish");
-                    thread::sleep(Duration::from_millis(3000));
-                }
-            });*/
-
             //Si la clonacion del socket estuvo Ok, creamos el clientHandler con el channel
             let (client_controller_sender, receiver_n) = mpsc::channel::<Packet>();
             //receiver_from_ch = Some(receiver);
-            let ch = ClientController::new(client_controller_sender);
-            let handler_from_ch = thread::spawn(move || {
+            let client_controller = ClientController::new(client_controller_sender);
+            let handler_from_client_controller = thread::spawn(move || {
                 //if let Some(receiver_n) = &mut self.receiver_from_ch {
                     loop {
                         let packet = receiver_n.recv().unwrap();
@@ -99,9 +81,8 @@ impl Client {
                 }
             });
 
-            //handler_write.join().unwrap();
             handler_read.join().unwrap();
-            handler_from_ch.join().unwrap();
+            handler_from_client_controller.join().unwrap();
         }
 
         Ok(())

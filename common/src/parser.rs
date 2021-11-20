@@ -7,15 +7,18 @@ use crate::all_packets::publish::PUBLISH_PACKET_TYPE;
 use crate::all_packets::puback::Puback;
 use crate::all_packets::puback::PUBACK_PACKET_TYPE;
 use crate::packet::{Packet, ReadPacket};
-use std::io::Read;
+use std::io::{Error, Read};
 
 const MAX_MQTT_STRING_BYTES: u16 = 65535;
 
 // Devuelve el packet correspondiente a lo que leyó del stream.
 pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
     let mut indetifier_byte = [0u8; 1];
-    stream.read_exact(&mut indetifier_byte)?;
-
+    let read_bytes = stream.read(&mut indetifier_byte)?;
+    if read_bytes == 0 {
+        println!("ENTRO a socket disconeect");
+        return Err("Socket desconectado".into());
+    }
     match indetifier_byte[0] & 0xF0 {
         CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream, indetifier_byte[0])?),
         CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream, indetifier_byte[0])?),
