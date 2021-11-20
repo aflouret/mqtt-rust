@@ -75,7 +75,8 @@ impl WritePacket for Publish {
         for byte in &encoded_message {
             stream.write_all(&[*byte])?;
         }
-        println!("Escribo bien el publish");
+        println!("Publish packet escrito correctamente");
+        
         Ok(())
     }
 }
@@ -103,6 +104,9 @@ impl ReadPacket for Publish {
         };
 
         let application_message = decode_mqtt_string(&mut remaining_bytes)?;
+        
+        println!("Publish packet leido correctamente");
+
         Ok(Packet::Publish(Publish::new(
             publish_flags,
             topic_name,

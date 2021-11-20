@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use common::all_packets::connect::Connect;
 use common::all_packets::connack::Connack;
 use common::all_packets::publish::{Publish, PublishFlags};
@@ -7,14 +8,17 @@ use common::packet::Packet;
 use common::packet::WritePacket;
 use common::parser;
 use std::net::TcpStream;
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 use std::thread;
+use crate::client_controller::ClientController;
 
 pub struct Client {
     client_id: String,
-    server_stream: TcpStream, //Option<TcpStream>
+    server_stream: Option<TcpStream>
+//    receiver_from_ch: Option<Receiver<Packet>>
 }
 
-//hilo para enviarle cosas al servidor
 impl Client {
     //Devuelve un cliente ya conectado al address
     pub fn new(client_id: String, address: String) -> Result<Client, Box<dyn std::error::Error>> {
@@ -23,58 +27,64 @@ impl Client {
 
         Ok(Client {
             client_id,
-            server_stream,
+            server_stream: Some(server_stream),
+           // receiver_from_ch: None
         })
     }
 
-    // Por ahora solo manda el connect y se fija de recibir bien el connack
     pub fn client_run(&mut self, connect_packet: Connect,
     ) -> Result<(), Box<dyn std::error::Error>> {
 
-        // handle connection, 
-        connect_packet.write_to(&mut self.server_stream)?;
+        // handle connection,
+        if let Some(socket_writer) =  &mut self.server_stream {
+            connect_packet.write_to(socket_writer)?;
+        }
         println!("Se envió el connect packet");
-        let received_packet = parser::read_packet(&mut self.server_stream).unwrap();
-        if let Packet::Connack(_connack_packet) = received_packet {
-            println!("Se recibió el connack packet");
+        if let Some(socket_reader) = &mut self.server_stream {
+            let received_packet = parser::read_packet(socket_reader)?;
+            if let Packet::Connack(_connack_packet) = received_packet {
+                println!("Se recibió el connack packet");
+            }
         }
 
-        //Escritura
-        let mut server_stream_write = self.server_stream.try_clone()?;
-/*      let server_stream = take().unwrap();
-        let el_otro = server_stream.try_clone();*/
-        let handler_write = thread::spawn(move ||  {
-            loop {
-                println!("Entro al thread de escritura");
-                let publish_packet = Publish::new(
-                    PublishFlags::new(0b0100_1011),
-                    "Topic".to_string(),
-                    Some(15),
-                    "Message".to_string(),
-                );
-                //mpsc - channel -
-                publish_packet.write_to(&mut server_stream_write).unwrap();
-                println!("Se envio el publish");
-                thread::sleep(Duration::from_millis(3000));
-            }
-        });
+        if let Some(socket) = &mut self.server_stream {
+            let mut server_stream_write = socket.try_clone()?;
+            let mut server_stream_read = socket.try_clone()?;
 
-       /* send_packets()*/
-        //Lectura
-        let mut server_stream_read = self.server_stream.try_clone()?;
-        let handler_read = thread::spawn(move || {
-            loop {
-                println!("Entro al thread de lectura");
-                let receiver_packet = parser::read_packet(&mut server_stream_read).unwrap();
-                println!("Socket Lectura Client: {:?}", server_stream_read);
-                if let Packet::Puback(_puback_packet) = receiver_packet {
-                    println!("Se recibió el puback packet");
+            //Si la clonacion del socket estuvo Ok, creamos el clientHandler con el channel
+            let (client_controller_sender, receiver_n) = mpsc::channel::<Packet>();
+            //receiver_from_ch = Some(receiver);
+            let client_controller = ClientController::new(client_controller_sender);
+            let handler_from_client_controller = thread::spawn(move || {
+                //if let Some(receiver_n) = &mut self.receiver_from_ch {
+                    loop {
+                        let packet = receiver_n.recv().unwrap();
+                        //detectar que paquete es - process_packet cliente
+                        match packet {
+                            Packet::Connect(connect) => connect.write_to(&mut server_stream_write),
+                            Packet::Publish(publish) => publish.write_to(&mut server_stream_write),
+                            _ => Err("Invalid packet".into()),
+                        };
+                    }
+                //}
+            });
+
+            //Lectura
+            let handler_read = thread::spawn(move || {
+                loop {
+                    let receiver_packet = parser::read_packet(&mut server_stream_read).unwrap();
+                    if let Packet::Puback(_puback_packet) = receiver_packet {
+                        println!("Thread-Lectura: Se recibió el puback packet");
+                    }
+                    //REcibimos la respuesta mandarsela por channel o por lo que fuera al clienthandler,
+                    //para que se la muestra a la interfaz grafica
                 }
-            }
-        });
+            });
 
-        handler_write.join().unwrap();
-        handler_read.join().unwrap();
+            handler_read.join().unwrap();
+            handler_from_client_controller.join().unwrap();
+        }
+
         Ok(())
     }
 }

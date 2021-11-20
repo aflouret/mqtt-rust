@@ -2,6 +2,7 @@ use crate::client::Client;
 use common::all_packets::connect::Connect;
 use common::all_packets::connect::ConnectPayload;
 mod client;
+mod client_controller;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = Client::new("Pepito".to_owned(), "127.0.0.1:8080".to_owned())?;
