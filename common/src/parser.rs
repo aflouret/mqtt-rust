@@ -6,13 +6,15 @@ use crate::all_packets::publish::Publish;
 use crate::all_packets::publish::PUBLISH_PACKET_TYPE;
 use crate::all_packets::puback::Puback;
 use crate::all_packets::puback::PUBACK_PACKET_TYPE;
+use crate::all_packets::subscribe::Subscribe;
+use crate::all_packets::subscribe::SUBSCRIBE_PACKET_TYPE;
 use crate::packet::{Packet, ReadPacket};
-use std::io::{Error, Read};
+use std::io::Read;
 
 const MAX_MQTT_STRING_BYTES: u16 = 65535;
 
 // Devuelve el packet correspondiente a lo que leyó del stream.
-pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
+pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>>{
     let mut indetifier_byte = [0u8; 1];
     let read_bytes = stream.read(&mut indetifier_byte)?;
     if read_bytes == 0 {
@@ -27,7 +29,7 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
         // 0x5_ => { Ok(Pubrec::read_from(stream, indetifier_byte[0])?) }
         // 0x6_ => { Ok(Pubrel::read_from(stream, indetifier_byte[0])?) }
         // 0x7_ => { Ok(Pubcomp::read_from(stream, indetifier_byte[0])?) }
-        // 0x8_ => { Ok(Subscribe::read_from(stream, indetifier_byte[0])?) }
+        SUBSCRIBE_PACKET_TYPE => { Ok(Subscribe::read_from(stream, indetifier_byte[0])?) }
         // 0x9_ => { Ok(Suback::read_from(stream, indetifier_byte[0])?) }
         // 0xa _ => { Ok(Unsuscribe::read_from(stream, indetifier_byte[0])?) }
         // 0xb_ => { Ok(Unsuback::read_from(stream, indetifier_byte[0])?) }

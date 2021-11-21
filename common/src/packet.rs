@@ -1,6 +1,7 @@
 use crate::all_packets::connack::Connack;
 use crate::all_packets::connect::Connect;
 use crate::all_packets::publish::Publish;
+use crate::all_packets::subscribe::Subscribe;
 use std::io::{Read, Write};
 use crate::all_packets::puback::Puback;
 
@@ -16,12 +17,13 @@ pub enum Packet {
     Connack(Connack),
     Publish(Publish),
     Puback(Puback),
-    Subscribe,
+    Subscribe(Subscribe),
     Unsubscribe,
     Suback,
     Unsuback,
     Disconnect,
 }
+
 
 pub trait ReadPacket {
     fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>>;
