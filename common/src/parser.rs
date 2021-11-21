@@ -8,6 +8,8 @@ use crate::all_packets::puback::Puback;
 use crate::all_packets::puback::PUBACK_PACKET_TYPE;
 use crate::all_packets::subscribe::Subscribe;
 use crate::all_packets::subscribe::SUBSCRIBE_PACKET_TYPE;
+use crate::all_packets::suback::Suback;
+use crate::all_packets::suback::SUBACK_PACKET_TYPE;
 use crate::packet::{Packet, ReadPacket};
 use std::io::Read;
 
@@ -26,11 +28,8 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
         CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream, indetifier_byte[0])?),
         PUBLISH_PACKET_TYPE => Ok(Publish::read_from(stream, indetifier_byte[0])?),
         PUBACK_PACKET_TYPE =>  Ok(Puback::read_from(stream, indetifier_byte[0])?),
-        // 0x5_ => { Ok(Pubrec::read_from(stream, indetifier_byte[0])?) }
-        // 0x6_ => { Ok(Pubrel::read_from(stream, indetifier_byte[0])?) }
-        // 0x7_ => { Ok(Pubcomp::read_from(stream, indetifier_byte[0])?) }
-        SUBSCRIBE_PACKET_TYPE => { Ok(Subscribe::read_from(stream, indetifier_byte[0])?) }
-        // 0x9_ => { Ok(Suback::read_from(stream, indetifier_byte[0])?) }
+        SUBSCRIBE_PACKET_TYPE => Ok(Subscribe::read_from(stream, indetifier_byte[0])?),
+        SUBACK_PACKET_TYPE => Ok(Suback::read_from(stream, indetifier_byte[0])?),
         // 0xa _ => { Ok(Unsuscribe::read_from(stream, indetifier_byte[0])?) }
         // 0xb_ => { Ok(Unsuback::read_from(stream, indetifier_byte[0])?) }
         // 0xc_ => { Ok(Pingreq::read_from(stream, indetifier_byte[0])?) }

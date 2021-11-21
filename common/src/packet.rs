@@ -2,6 +2,7 @@ use crate::all_packets::connack::Connack;
 use crate::all_packets::connect::Connect;
 use crate::all_packets::publish::Publish;
 use crate::all_packets::subscribe::Subscribe;
+use crate::all_packets::suback::Suback;
 use std::io::{Read, Write};
 use crate::all_packets::puback::Puback;
 
@@ -19,7 +20,7 @@ pub enum Packet {
     Puback(Puback),
     Subscribe(Subscribe),
     Unsubscribe,
-    Suback,
+    Suback(Suback),
     Unsuback,
     Disconnect,
 }
