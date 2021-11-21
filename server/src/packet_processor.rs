@@ -34,10 +34,12 @@ impl PacketProcessor {
             loop {
                 // TODO: sacar unwraps del thread
                 if let Ok((id, packet)) = self.rx.recv() {
-                    if let Ok(packet) = packet {
-                        self.process_packet(packet, id).unwrap();
+                    
+                    match packet {
+                        Ok(packet) => self.process_packet(packet, id).unwrap(),
+                        Err(_) => self.handle_disconnect_error(id),
                     }
-                    // (TODO) else: se desconecto el handler, hay que avisarle a la sesion
+
                 } else {
                     break;
                 }  
@@ -45,6 +47,17 @@ impl PacketProcessor {
         });
         join_handle
     } 
+
+    pub fn handle_disconnect_error(&mut self, id: u32) {
+        for (_, session) in &mut self.clients {
+            if session.get_client_handler_id() == Some(id) {
+                session.disconnect();
+            }
+        }
+
+        let mut senders_hash = self.senders_to_c_h_writers.write().unwrap();
+        senders_hash.remove(&id).unwrap();
+    }
 
     pub fn process_packet(&mut self, packet: Packet, id: u32) -> Result<(), Box<dyn std::error::Error>> {
 

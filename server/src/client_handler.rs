@@ -45,33 +45,22 @@ impl ClientHandler {
 
         let writer_join_handle = thread::spawn(move || {
 
-            // channel para que el reader le avise al writer que el cliente se desconecto
-            let (error_tx, error_rx) = mpsc::channel();
-
             let reader_join_handle = thread::spawn(move || {
                 loop {
-                    let result = client_handler_reader.receive_packet();
-                    if result.is_err() {
-                        //Ver como detectar cuando uun cliente se desconecta
-                        println!("Client Disconnect");
-                        error_tx.send(result).unwrap();
+                    if let Err(_) = client_handler_reader.receive_packet() {
                         break;
                     }
-                    error_tx.send(Ok(())).unwrap();
                 }
+                println!("reader destroyed");
             });
 
             loop {
-                if let Ok(result) = error_rx.try_recv() {
-                    if result.is_err() {
-                        println!("Writter recibe client disconnect");
-                        break;
-                    }
+                if let Err(_) = client_handler_writer.send_packet() {
+                    break;
                 }
-                client_handler_writer.send_packet().unwrap();
             }
-
             reader_join_handle.join().unwrap();
+            println!("writer destroyed");
         });
 
         Ok(writer_join_handle)
@@ -147,7 +136,11 @@ impl ClientHandlerReader {
             Ok(packet) => if let Err(error) = self.sender.send((self.id, Ok(packet))) {
                 return Err(Box::new(error));
             },
-            Err(error) => return Err(Box::new(SendError("Socket Disconnect"))),
+            Err(_) => {
+                self.sender.send((self.id, Err(Box::new(SendError("Socket Disconnect"))) )).unwrap();
+                return Err(Box::new(SendError("Socket Disconnect")))
+            },
+
         }
 
         Ok(())

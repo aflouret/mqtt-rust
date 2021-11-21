@@ -30,6 +30,10 @@ impl Session {
         &self.client_data.client_id
     }
 
+    pub fn get_client_handler_id(&self) -> Option<u32> {
+        self.client_handler_id
+    }
+
     pub fn is_active(&self) -> bool {
         self.client_handler_id.is_some()
     }
