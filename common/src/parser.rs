@@ -1,38 +1,6 @@
-use crate::all_packets::connack::{Connack, CONNACK_PACKET_TYPE};
-use crate::all_packets::connect::{Connect, CONNECT_PACKET_TYPE};
-use crate::all_packets::publish::{Publish, PUBLISH_PACKET_TYPE};
-use crate::all_packets::puback::{Puback, PUBACK_PACKET_TYPE};
-use crate::all_packets::subscribe::{Subscribe, SUBSCRIBE_PACKET_TYPE};
-use crate::all_packets::suback::{Suback, SUBACK_PACKET_TYPE};
-use crate::all_packets::disconnect::{Disconnect, DISCONNECT_PACKET_TYPE};
-use crate::packet::{Packet, ReadPacket};
 use std::io::Read;
 
 const MAX_MQTT_STRING_BYTES: u16 = 65535;
-
-// Devuelve el packet correspondiente a lo que leyó del stream.
-pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>>{
-    let mut indetifier_byte = [0u8; 1];
-    let read_bytes = stream.read(&mut indetifier_byte)?;
-    if read_bytes == 0 {
-        println!("ENTRO a socket disconeect");
-        return Err("Socket desconectado".into());
-    }
-    match indetifier_byte[0] & 0xF0 {
-        CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream, indetifier_byte[0])?),
-        CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream, indetifier_byte[0])?),
-        PUBLISH_PACKET_TYPE => Ok(Publish::read_from(stream, indetifier_byte[0])?),
-        PUBACK_PACKET_TYPE =>  Ok(Puback::read_from(stream, indetifier_byte[0])?),
-        SUBSCRIBE_PACKET_TYPE => Ok(Subscribe::read_from(stream, indetifier_byte[0])?),
-        SUBACK_PACKET_TYPE => Ok(Suback::read_from(stream, indetifier_byte[0])?),
-        // 0xa _ => { Ok(Unsuscribe::read_from(stream, indetifier_byte[0])?) }
-        // 0xb_ => { Ok(Unsuback::read_from(stream, indetifier_byte[0])?) }
-        // 0xc_ => { Ok(Pingreq::read_from(stream, indetifier_byte[0])?) }
-        // 0xd _ => { Ok(Pingresp::read_from(stream, indetifier_byte[0])?) }
-        DISCONNECT_PACKET_TYPE => Ok(Disconnect::read_from(stream, indetifier_byte[0])?),
-        _ => Err("Ningún packet tiene ese código".into()),
-    }
-}
 
 // Algoritmo para decodificar el número que representa el Remaining Length
 // en el fixed header de cualquier packet
