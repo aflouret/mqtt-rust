@@ -1,15 +1,10 @@
-use crate::all_packets::connack::Connack;
-use crate::all_packets::connack::CONNACK_PACKET_TYPE;
-use crate::all_packets::connect::Connect;
-use crate::all_packets::connect::CONNECT_PACKET_TYPE;
-use crate::all_packets::publish::Publish;
-use crate::all_packets::publish::PUBLISH_PACKET_TYPE;
-use crate::all_packets::puback::Puback;
-use crate::all_packets::puback::PUBACK_PACKET_TYPE;
-use crate::all_packets::subscribe::Subscribe;
-use crate::all_packets::subscribe::SUBSCRIBE_PACKET_TYPE;
-use crate::all_packets::suback::Suback;
-use crate::all_packets::suback::SUBACK_PACKET_TYPE;
+use crate::all_packets::connack::{Connack, CONNACK_PACKET_TYPE};
+use crate::all_packets::connect::{Connect, CONNECT_PACKET_TYPE};
+use crate::all_packets::publish::{Publish, PUBLISH_PACKET_TYPE};
+use crate::all_packets::puback::{Puback, PUBACK_PACKET_TYPE};
+use crate::all_packets::subscribe::{Subscribe, SUBSCRIBE_PACKET_TYPE};
+use crate::all_packets::suback::{Suback, SUBACK_PACKET_TYPE};
+use crate::all_packets::disconnect::{Disconnect, DISCONNECT_PACKET_TYPE};
 use crate::packet::{Packet, ReadPacket};
 use std::io::Read;
 
@@ -34,7 +29,7 @@ pub fn read_packet(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::
         // 0xb_ => { Ok(Unsuback::read_from(stream, indetifier_byte[0])?) }
         // 0xc_ => { Ok(Pingreq::read_from(stream, indetifier_byte[0])?) }
         // 0xd _ => { Ok(Pingresp::read_from(stream, indetifier_byte[0])?) }
-        // 0xe _ => { Ok(Disconnect::read_from(stream, indetifier_byte[0])?) }
+        DISCONNECT_PACKET_TYPE => Ok(Disconnect::read_from(stream, indetifier_byte[0])?),
         _ => Err("Ningún packet tiene ese código".into()),
     }
 }

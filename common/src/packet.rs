@@ -1,10 +1,11 @@
-use crate::all_packets::connack::Connack;
 use crate::all_packets::connect::Connect;
+use crate::all_packets::connack::Connack;
 use crate::all_packets::publish::Publish;
+use crate::all_packets::puback::Puback;
 use crate::all_packets::subscribe::Subscribe;
 use crate::all_packets::suback::Suback;
+use crate::all_packets::disconnect::Disconnect;
 use std::io::{Read, Write};
-use crate::all_packets::puback::Puback;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -22,7 +23,7 @@ pub enum Packet {
     Unsubscribe,
     Suback(Suback),
     Unsuback,
-    Disconnect,
+    Disconnect(Disconnect),
 }
 
 
