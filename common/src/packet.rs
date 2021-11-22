@@ -57,10 +57,8 @@ impl Packet {
             _ => Err("Ningún packet tiene ese código".into()),
         }
     }
-}
 
-impl WritePacket for Packet {
-    fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>>{
+    pub fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>>{
         match self {
             Packet::Connect(connect) => {
                 println!("Se manda el connect...");
