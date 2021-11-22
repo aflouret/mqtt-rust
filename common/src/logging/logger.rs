@@ -6,7 +6,7 @@ use std::thread;
 
 
 pub struct Logger {
-    logger_send: Mutex<Sender<String>>
+    logger_send: Mutex<Sender<LogMessage>>
 }
 
 impl Logger {
@@ -16,12 +16,12 @@ impl Logger {
 
         }*/
         if let Ok (mut file) = File::create(file_path) {
-            let (sender, receiver) = mpsc::channel::<String>();
+            let (sender, receiver) = mpsc::channel::<LogMessage>();
             thread::spawn(move ||
                 loop {
                     let msg = receiver.recv();
                     if let Ok(m) = msg {
-                        file.write(m.as_bytes());
+                        file.write(m.msg_to_string().as_bytes());
                     }
                 }
             );
@@ -33,7 +33,7 @@ impl Logger {
         Err("No se pudo crear el logger".into())
     }
 
-    pub fn log_msg(&self, msg: &str) -> Result<(), Box<dyn std::error::Error>> {
+/*    pub fn log_msg(&self, msg: &str, op: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(sender) = self.logger_send.lock() {
             sender.send(msg.parse().unwrap());
         } else {
@@ -41,5 +41,33 @@ impl Logger {
         }
 
         Ok(())
+    }*/
+    pub fn log_msg(&self, msg: LogMessage) -> Result<(), Box<dyn std::error::Error>> {
+        if let Ok(sender) = self.logger_send.lock() {
+            sender.send(msg);
+        } else {
+            return Err("Error al loggear el mensaje".into());
+        }
+
+        Ok(())
+    }
+}
+
+pub struct LogMessage {
+    clientId: String,
+    message: String,
+}
+
+impl LogMessage {
+    pub fn new(msg: String ,client: String) -> LogMessage {
+        LogMessage {
+            clientId: client,
+            message: msg,
+        }
+    }
+
+    pub fn msg_to_string(self) -> String {
+        let s = self.message + " " + &*self.clientId + "\n";
+        return s.to_string();
     }
 }

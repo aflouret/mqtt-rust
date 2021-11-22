@@ -11,7 +11,7 @@ use std::sync::{Mutex};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
-use common::logging::logger::Logger;
+use common::logging::logger::{Logger, LogMessage};
 
 
 pub struct PacketProcessor {
@@ -35,7 +35,6 @@ impl PacketProcessor {
     }
 
     pub fn run(mut self) -> JoinHandle<()> {
-//        self.logger = logg.clone();
         let join_handle = thread::spawn(move || {
             loop {
                 // TODO: sacar unwraps del thread
@@ -53,11 +52,9 @@ impl PacketProcessor {
     } 
 
     pub fn process_packet(&mut self, packet: Packet, id: u32) -> Result<(), Box<dyn std::error::Error>> {
-
         let response_packet = match packet {
-
                 Packet::Connect(connect_packet) => {
-                    self.logger.log_msg("Connect packet received from");
+                    self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(),id.to_string()));
                     println!("Recibi el Connect (en process_pracket)");
                     let connack_packet = self.handle_connect_packet(connect_packet, id)?;
                     Ok(Packet::Connack(connack_packet))
@@ -124,6 +121,7 @@ impl PacketProcessor {
         else { session_present = exists_previous_session; } // TODO: revisar esto, línea 683 pdf
         
         let connack_packet = Connack::new(session_present, 0);
+        self.logger.log_msg(LogMessage::new("Connack packet send it to:".to_string(),client_handler_id.to_string()));
         Ok(connack_packet)
     }
 }

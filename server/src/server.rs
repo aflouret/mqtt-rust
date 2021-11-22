@@ -9,7 +9,7 @@ use crate::packet_processor::PacketProcessor;
 use std::sync::{Mutex, mpsc};
 use std::sync::mpsc::{Sender};
 use std::sync::{RwLock, Arc};
-use common::logging::logger::Logger;
+use common::logging::logger::{Logger, LogMessage};
 
 
 pub struct Server {
@@ -26,7 +26,7 @@ impl Server {
         let address = self.config.get_address() + &*self.config.get_port();
         let listener = TcpListener::bind(&address)?;
         println!("Servidor escuchando en: {} ", &address);
-        self.logger.log_msg("Servidor escuchando en:8080");
+        self.logger.log_msg(LogMessage::new("Servidor escuchando:".to_string(), "8080".to_string()));
         let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>::new()));
         let (c_h_reader_tx, server_rx) = mpsc::channel::<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>();
 
