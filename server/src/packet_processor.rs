@@ -4,32 +4,38 @@ use common::all_packets::connect::Connect;
 use common::packet::{Packet, WritePacket};
 use std::net::{TcpStream};
 use std::collections::HashMap;
+use std::error::Error;
 use common::all_packets::publish::Publish;
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
-
+use common::logging::logger::Logger;
 
 
 pub struct PacketProcessor {
     clients: HashMap<String, Session>,
     rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
     senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
+    logger: Arc<Logger>,
 }
 
 impl PacketProcessor {
 
-    pub fn new(rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>, senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,) -> PacketProcessor {
+    pub fn new(rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
+               senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
+               logger: Arc<Logger>) -> PacketProcessor {
         PacketProcessor {
             clients: HashMap::<String, Session>::new(),
             rx,
             senders_to_c_h_writers,
+            logger,
         }
     }
 
     pub fn run(mut self) -> JoinHandle<()> {
+//        self.logger = logg.clone();
         let join_handle = thread::spawn(move || {
             loop {
                 // TODO: sacar unwraps del thread
@@ -51,6 +57,7 @@ impl PacketProcessor {
         let response_packet = match packet {
 
                 Packet::Connect(connect_packet) => {
+                    self.logger.log_msg("Connect packet received from");
                     println!("Recibi el Connect (en process_pracket)");
                     let connack_packet = self.handle_connect_packet(connect_packet, id)?;
                     Ok(Packet::Connack(connack_packet))
