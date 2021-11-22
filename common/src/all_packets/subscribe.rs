@@ -4,7 +4,7 @@ use crate::parser::{encode_mqtt_string, decode_remaining_length, decode_mqtt_str
 use std::io::ErrorKind::UnexpectedEof;
 
 pub const SUBSCRIBE_PACKET_TYPE: u8 = 0x80;
-pub const SUBSCRIBE_FIRST_BYTE: u8 = 0x82;
+const SUBSCRIBE_FIRST_BYTE: u8 = 0x82;
 const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
 #[derive(Debug)]
@@ -74,7 +74,7 @@ impl WritePacket for Subscribe {
         }
 
         //VARIABLE HEADER
-        // Escribimos el packet id (si tiene)
+        // Escribimos el packet id
         let packet_id_bytes = self.packet_id.to_be_bytes();
         stream.write_all(&packet_id_bytes)?;
         
@@ -113,7 +113,7 @@ impl ReadPacket for Subscribe {
                 Err(e) => match e.kind(){
                     UnexpectedEof => return Ok(Packet::Subscribe(packet_subscribe)),
                     _ => return Err(Box::new(e)),
-                }, //read_exact devuelve std::io::ErrorKind::UnexpectedEof
+                },
                 Ok(topic) => packet_subscribe.add_topic(topic),
             }
         }
@@ -123,7 +123,7 @@ impl ReadPacket for Subscribe {
 fn verify_subscribe_byte(byte: &u8) -> Result<(), String>{
     match *byte {
         SUBSCRIBE_FIRST_BYTE => return Ok(()),
-        _ => return Err("Wrong Packet Type".to_string()),
+        _ => return Err("Wrong First Byte".to_string()),
     }
 }
 

@@ -27,7 +27,10 @@ impl WritePacket for Disconnect {
 impl ReadPacket for Disconnect {
     fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
         verify_disconnect_byte(&initial_byte)?;
-        let _remaining_length = decode_remaining_length(stream)?;
+        let remaining_length = decode_remaining_length(stream)?;
+        if remaining_length != 0 {
+            return Err(Box::new(Error::new(Other, "Incorrect Remaining Length")));
+        }
 
         Ok(Packet::Disconnect(Disconnect{}))
     }
