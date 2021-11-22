@@ -5,6 +5,7 @@ use crate::all_packets::puback::{Puback, PUBACK_PACKET_TYPE};
 use crate::all_packets::subscribe::{Subscribe, SUBSCRIBE_PACKET_TYPE};
 use crate::all_packets::suback::{Suback, SUBACK_PACKET_TYPE};
 use crate::all_packets::disconnect::{Disconnect, DISCONNECT_PACKET_TYPE};
+use crate::all_packets::unsubscribe::{Unsubscribe, UNSUBSCRIBE_PACKET_TYPE};
 use std::io::{Read, Write};
 
 #[repr(u8)]
@@ -28,9 +29,11 @@ pub enum Packet {
     Publish(Publish),
     Puback(Puback),
     Subscribe(Subscribe),
-    Unsubscribe,
     Suback(Suback),
+    Unsubscribe(Unsubscribe),
     Unsuback,
+    Pingreq,
+    Pingresp,
     Disconnect(Disconnect),
 }
 
@@ -49,7 +52,7 @@ impl Packet {
             PUBACK_PACKET_TYPE =>  Ok(Puback::read_from(stream, indetifier_byte[0])?),
             SUBSCRIBE_PACKET_TYPE => Ok(Subscribe::read_from(stream, indetifier_byte[0])?),
             SUBACK_PACKET_TYPE => Ok(Suback::read_from(stream, indetifier_byte[0])?),
-            // 0xa _ => { Ok(Unsuscribe::read_from(stream, indetifier_byte[0])?) }
+            UNSUBSCRIBE_PACKET_TYPE => Ok(Unsubscribe::read_from(stream, indetifier_byte[0])?),
             // 0xb_ => { Ok(Unsuback::read_from(stream, indetifier_byte[0])?) }
             // 0xc_ => { Ok(Pingreq::read_from(stream, indetifier_byte[0])?) }
             // 0xd _ => { Ok(Pingresp::read_from(stream, indetifier_byte[0])?) }
