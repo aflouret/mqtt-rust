@@ -1,8 +1,9 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use std::io::{Read, Write};
+use std::io::{Read, Write, Cursor};
+use crate::parser::{decode_remaining_length, encode_remaining_length};
 
 pub const CONNACK_PACKET_TYPE: u8 = 0x20;
-const CONNACK_REMAINING_LENGTH: u8 = 2;
+const CONNACK_REMAINING_LENGTH: u32 = 2;
 
 pub struct Connack {
     pub session_present: bool,
@@ -24,8 +25,11 @@ impl WritePacket for Connack {
         // Escribimos el packet type + los flags del packet type
         stream.write_all(&[CONNACK_PACKET_TYPE])?;
 
-        // Escribimos el remaining length
-        stream.write_all(&[CONNACK_REMAINING_LENGTH])?;
+        //Escribimos el remaining length
+        let remaining_length_encoded = encode_remaining_length(CONNACK_REMAINING_LENGTH);
+        for byte in remaining_length_encoded {
+            stream.write_all(&[byte])?;
+        }
 
         // VARIABLE HEADER
         // Escribimos el session present flag
@@ -43,18 +47,21 @@ impl WritePacket for Connack {
 
 impl ReadPacket for Connack {
     fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
-        let mut remaining_length_byte = [0u8; 1];
-        stream.read_exact(&mut remaining_length_byte)?;
-        verify_remaining_length_byte(&remaining_length_byte)?;
+        let remaining_length = decode_remaining_length(stream)?;
+        verify_remaining_length_byte(&remaining_length)?;
+
+        let mut remaining = vec![0u8; remaining_length as usize];
+        stream.read_exact(&mut remaining)?;
+        let mut remaining_bytes = Cursor::new(remaining);
 
         let mut flags_byte = [0u8; 1];
-        stream.read_exact(&mut flags_byte)?;
+        remaining_bytes.read_exact(&mut flags_byte)?;
         verify_flags_byte(&flags_byte)?;
 
         let session_present = flags_byte[0] == 0x1;
 
         let mut connect_return_byte = [0u8; 1];
-        stream.read_exact(&mut connect_return_byte)?;
+        remaining_bytes.read_exact(&mut connect_return_byte)?;
         let connect_return_code = connect_return_byte[0];
 
         verify_packet(session_present, connect_return_code)?;
@@ -75,8 +82,8 @@ fn verify_flags_byte(byte: &[u8; 1]) -> Result<(), String> {
     Ok(())
 }
 
-fn verify_remaining_length_byte(byte: &[u8; 1]) -> Result<(), String> {
-    if byte[0] != CONNACK_REMAINING_LENGTH {
+fn verify_remaining_length_byte(byte: &u32) -> Result<(), String> {
+    if *byte != CONNACK_REMAINING_LENGTH {
         return Err("Remaining length byte inválido".into());
     }
     Ok(())
@@ -117,14 +124,14 @@ mod tests {
 
     #[test]
     fn correct_remaining_length_byte() {
-        let byte: [u8; 1] = [0x2];
+        let byte: u32 = 0x2;
         let to_test = verify_remaining_length_byte(&byte);
         assert_eq!(to_test, Ok(()));
     }
 
     #[test]
     fn error_remaining_length_byte() {
-        let byte: [u8; 1] = [0x5];
+        let byte: u32 = 0x5;
         let to_test = verify_remaining_length_byte(&byte);
         assert_eq!(to_test, Err("Remaining length byte inválido".to_owned()));
     }

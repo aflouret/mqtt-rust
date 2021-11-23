@@ -1,14 +1,14 @@
 use std::error::Error;
-use std::io::{Read, Write};
+use std::io::{Read, Write, Cursor};
 use crate::packet::{Packet, ReadPacket, WritePacket};
+use crate::parser::{decode_remaining_length, encode_remaining_length};
 
 pub const PUBACK_PACKET_TYPE : u8 = 0x40;
-const PUBACK_REMAINING_LENGTH: u8 = 2;
+const PUBACK_REMAINING_LENGTH: u32 = 2;
 
 #[derive(Debug)]
 pub struct Puback {
     packet_id: u16,
-
 }
 
 impl Puback {
@@ -17,7 +17,6 @@ impl Puback {
             packet_id,
         }
     }
-
 }
 
 impl WritePacket for Puback{
@@ -27,7 +26,10 @@ impl WritePacket for Puback{
         stream.write_all(&[PUBACK_PACKET_TYPE])?;
 
         //Escribimos el remaining length
-        stream.write_all(&[PUBACK_REMAINING_LENGTH])?;
+        let remaining_length_encoded = encode_remaining_length(PUBACK_REMAINING_LENGTH);
+        for byte in remaining_length_encoded {
+            stream.write_all(&[byte])?;
+        }
 
         //VARIABLE HEADER
         let packet_id_from_publish = self.packet_id.to_be_bytes();
@@ -41,12 +43,15 @@ impl WritePacket for Puback{
 
 impl ReadPacket for Puback {
     fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn Error>> {
-        let mut remaining_length_byte = [0u8; 1];
-        stream.read_exact(&mut remaining_length_byte)?;
-        verify_remaining_length_byte(&remaining_length_byte)?;
+        let remaining_length = decode_remaining_length(stream)?;
+        verify_remaining_length_byte(&remaining_length)?;
+
+        let mut remaining = vec![0u8; remaining_length as usize];
+        stream.read_exact(&mut remaining)?;
+        let mut remaining_bytes = Cursor::new(remaining);
 
         let mut packet_id = [0u8; 2];
-        stream.read_exact(&mut packet_id)?;
+        remaining_bytes.read_exact(&mut packet_id)?;
         let packet_id = u16::from_be_bytes(packet_id);
 
         println!("Puback packet leido correctamente");
@@ -59,8 +64,8 @@ impl ReadPacket for Puback {
 }
 
 //Consultar de meterla en un utils.rs porque tmb se usa en connack.rs
-fn verify_remaining_length_byte(byte: &[u8; 1]) -> Result<(), String> {
-    if byte[0] != PUBACK_REMAINING_LENGTH {
+fn verify_remaining_length_byte(byte: &u32) -> Result<(), String> {
+    if *byte != PUBACK_REMAINING_LENGTH {
         return Err("Remaining length byte inválido".into());
     }
     Ok(())
@@ -73,7 +78,7 @@ mod tests {
 
     #[test]
     fn correct_remaining_length_byte() {
-        let byte: [u8; 1] = [0x2];
+        let byte: u32 = 0x2;
         let to_test = verify_remaining_length_byte(&byte);
         assert_eq!(to_test, Ok(()));
     }
