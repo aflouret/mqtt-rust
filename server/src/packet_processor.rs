@@ -61,6 +61,7 @@ impl PacketProcessor {
                 }
 
                 Packet::Publish(publish_packet) => {
+                    self.logger.log_msg(LogMessage::new("Publish Packet received from:".to_string(),id.to_string()));
                     //TODO: self.handle_publish_packet(publish_packet)?;
                     let puback_packet = Puback::new(1);
                     Ok(Packet::Puback(puback_packet))
