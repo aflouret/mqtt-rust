@@ -41,7 +41,7 @@ impl Client {
         }
         println!("Se envió el connect packet");
         if let Some(socket_reader) = &mut self.server_stream {
-            let received_packet = parser::read_packet(socket_reader)?;
+            let received_packet = Packet::read_from(socket_reader)?;
             if let Packet::Connack(_connack_packet) = received_packet {
                 println!("Se recibió el connack packet");
             }
@@ -72,7 +72,7 @@ impl Client {
             //Lectura
             let handler_read = thread::spawn(move || {
                 loop {
-                    let receiver_packet = parser::read_packet(&mut server_stream_read).unwrap();
+                    let receiver_packet = Packet::read_from(&mut server_stream_read).unwrap();
                     if let Packet::Puback(_puback_packet) = receiver_packet {
                         println!("Thread-Lectura: Se recibió el puback packet");
                     }
