@@ -1,6 +1,11 @@
-pub mod connack;
 pub mod connect;
+pub mod connack;
 pub mod publish;
 pub mod puback;
-
-// El resto de packets...
+pub mod subscribe;
+pub mod suback;
+pub mod unsubscribe;
+pub mod unsuback;
+pub mod pingreq;
+pub mod pingresp;
+pub mod disconnect;

@@ -1,6 +1,5 @@
 use std::net::TcpStream;
 use common::packet::{Packet, WritePacket};
-use common::parser;
 use std::sync::{Mutex, mpsc};
 use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
@@ -72,7 +71,6 @@ impl ClientHandler {
 struct ClientHandlerWriter {
     //Maneja la conexion del socket
     socket: TcpStream,
-    //TODO:Option<Tcp> -> CONSULTAR:no iria porque  si se desconecta se destruye el client_handler
     receiver: Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>, //Por acá recibe los paquetes que escribe en el socket
 }
 
@@ -85,33 +83,11 @@ impl ClientHandlerWriter {
     }
 
     pub fn send_packet(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let received = self.receiver.recv()?;
-
-        /* TODO: los packets, al ser polimorficos, deberiamos poder hacer received.write_to(socket)
-             en vez de hacer el match. Algo asi: (hay que hacer algunas cositas)
-
-        if let Ok(packet) = self.receiver.recv() {
-            packet.write_to(socket)?;
+        if let Ok(packet) = self.receiver.recv()? {
+                packet.write_to(&mut self.socket)
+        } else {
+            Err("No se pudo enviar el packet".into())
         }
-        */
-
-        match received {
-            Ok(Packet::Connack(connack)) => {
-                println!("Se manda el connack...");
-                connack.write_to(&mut self.socket)?;
-            }
-
-            Ok(Packet::Puback(puback)) => {
-                println!("Se manda el puback...");
-                puback.write_to(&mut self.socket)?;
-            }
-
-            //...
-
-            _ => println!("Packet desconocido")
-        }
-
-        Ok(())
     }
 }
 
@@ -132,7 +108,7 @@ impl ClientHandlerReader {
     }
 
     pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
-        match parser::read_packet(&mut self.socket) {
+        match Packet::read_from(&mut self.socket) {
             Ok(packet) => if let Err(error) = self.sender.send((self.id, Ok(packet))) {
                 return Err(Box::new(error));
             },

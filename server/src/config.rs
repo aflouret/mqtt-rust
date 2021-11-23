@@ -1,7 +1,11 @@
+
+
+const LOGFILE: &str = "logfile.txt";
+
 pub struct Config {
     port: u16,
-
     address: String,
+    log_filename: String,
 }
 
 impl Config {
@@ -11,7 +15,7 @@ impl Config {
             address: "0.0.0.0:".to_string(),
             //Path de archivo sobre el cuál se realizará un dump
             //Intervalo de tiempo para el cual se realizará el dump
-            //Path de archivo de log
+            log_filename: LOGFILE.to_string(),
         }
     }
 
@@ -22,4 +26,6 @@ impl Config {
     pub fn get_address(&self) -> String {
         self.address.to_string()
     }
+
+    pub fn get_logfilename(&self) -> String {self.log_filename.to_string()}
 }

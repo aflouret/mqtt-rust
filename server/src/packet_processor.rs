@@ -4,28 +4,33 @@ use common::all_packets::connect::Connect;
 use common::packet::{Packet, WritePacket};
 use std::net::{TcpStream};
 use std::collections::HashMap;
+use std::error::Error;
 use common::all_packets::publish::Publish;
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
-
+use common::logging::logger::{Logger, LogMessage};
 
 
 pub struct PacketProcessor {
     clients: HashMap<String, Session>,
     rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
     senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
+    logger: Arc<Logger>,
 }
 
 impl PacketProcessor {
 
-    pub fn new(rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>, senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,) -> PacketProcessor {
+    pub fn new(rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
+               senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
+               logger: Arc<Logger>) -> PacketProcessor {
         PacketProcessor {
             clients: HashMap::<String, Session>::new(),
             rx,
             senders_to_c_h_writers,
+            logger,
         }
     }
 
@@ -60,16 +65,16 @@ impl PacketProcessor {
     }
 
     pub fn process_packet(&mut self, packet: Packet, id: u32) -> Result<(), Box<dyn std::error::Error>> {
-
         let response_packet = match packet {
-
                 Packet::Connect(connect_packet) => {
+                    self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(),id.to_string()));
                     println!("Recibi el Connect (en process_pracket)");
                     let connack_packet = self.handle_connect_packet(connect_packet, id)?;
                     Ok(Packet::Connack(connack_packet))
                 }
 
                 Packet::Publish(publish_packet) => {
+                    self.logger.log_msg(LogMessage::new("Publish Packet received from:".to_string(),id.to_string()));
                     //TODO: self.handle_publish_packet(publish_packet)?;
                     let puback_packet = Puback::new(1);
                     Ok(Packet::Puback(puback_packet))
@@ -130,6 +135,7 @@ impl PacketProcessor {
         else { session_present = exists_previous_session; } // TODO: revisar esto, línea 683 pdf
         
         let connack_packet = Connack::new(session_present, 0);
+        self.logger.log_msg(LogMessage::new("Connack packet send it to:".to_string(),client_handler_id.to_string()));
         Ok(connack_packet)
     }
 }
