@@ -6,7 +6,10 @@ use crate::all_packets::subscribe::{Subscribe, SUBSCRIBE_PACKET_TYPE};
 use crate::all_packets::suback::{Suback, SUBACK_PACKET_TYPE};
 use crate::all_packets::disconnect::{Disconnect, DISCONNECT_PACKET_TYPE};
 use crate::all_packets::unsubscribe::{Unsubscribe, UNSUBSCRIBE_PACKET_TYPE};
+use crate::all_packets::unsuback::{Unsuback, UNSUBACK_PACKET_TYPE};
 use std::io::{Read, Write};
+
+const PACKET_TYPE_BYTE: u8 = 0xF0;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,7 +34,7 @@ pub enum Packet {
     Subscribe(Subscribe),
     Suback(Suback),
     Unsubscribe(Unsubscribe),
-    Unsuback,
+    Unsuback(Unsuback),
     Pingreq,
     Pingresp,
     Disconnect(Disconnect),
@@ -45,7 +48,7 @@ impl Packet {
             println!("ENTRO a socket disconeect");
             return Err("Socket desconectado".into());
         }
-        match indetifier_byte[0] & 0xF0 {
+        match indetifier_byte[0] & PACKET_TYPE_BYTE {
             CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream, indetifier_byte[0])?),
             CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream, indetifier_byte[0])?),
             PUBLISH_PACKET_TYPE => Ok(Publish::read_from(stream, indetifier_byte[0])?),
@@ -53,7 +56,7 @@ impl Packet {
             SUBSCRIBE_PACKET_TYPE => Ok(Subscribe::read_from(stream, indetifier_byte[0])?),
             SUBACK_PACKET_TYPE => Ok(Suback::read_from(stream, indetifier_byte[0])?),
             UNSUBSCRIBE_PACKET_TYPE => Ok(Unsubscribe::read_from(stream, indetifier_byte[0])?),
-            // 0xb_ => { Ok(Unsuback::read_from(stream, indetifier_byte[0])?) }
+            UNSUBACK_PACKET_TYPE => Ok(Unsuback::read_from(stream, indetifier_byte[0])?),
             // 0xc_ => { Ok(Pingreq::read_from(stream, indetifier_byte[0])?) }
             // 0xd _ => { Ok(Pingresp::read_from(stream, indetifier_byte[0])?) }
             DISCONNECT_PACKET_TYPE => Ok(Disconnect::read_from(stream, indetifier_byte[0])?),
@@ -81,6 +84,31 @@ impl Packet {
             Packet::Puback(puback) => {
                 println!("Se manda el puback...");
                 puback.write_to(stream)
+            }
+
+            Packet::Subscribe(subscribe) => {
+                println!("Se manda el subscribe...");
+                subscribe.write_to(stream)
+            }
+
+            Packet::Suback(suback) => {
+                println!("Se manda el suback...");
+                suback.write_to(stream)
+            }
+
+            Packet::Unsubscribe(unsubscribe) => {
+                println!("Se manda el unsubscribe...");
+                unsubscribe.write_to(stream)
+            }
+
+            Packet::Unsuback(unsuback) => {
+                println!("Se manda el unsuback...");
+                unsuback.write_to(stream)
+            }
+
+            Packet::Disconnect(disconnect) => {
+                println!("Se manda el disconnect...");
+                disconnect.write_to(stream)
             }
 
             //...
