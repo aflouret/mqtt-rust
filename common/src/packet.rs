@@ -7,6 +7,8 @@ use crate::all_packets::suback::{Suback, SUBACK_PACKET_TYPE};
 use crate::all_packets::disconnect::{Disconnect, DISCONNECT_PACKET_TYPE};
 use crate::all_packets::unsubscribe::{Unsubscribe, UNSUBSCRIBE_PACKET_TYPE};
 use crate::all_packets::unsuback::{Unsuback, UNSUBACK_PACKET_TYPE};
+use crate::all_packets::pingreq::{Pingreq, PINGREQ_PACKET_TYPE};
+use crate::all_packets::pingresp::{Pingresp, PINGRESP_PACKET_TYPE};
 use std::io::{Read, Write};
 
 const PACKET_TYPE_BYTE: u8 = 0xF0;
@@ -35,8 +37,8 @@ pub enum Packet {
     Suback(Suback),
     Unsubscribe(Unsubscribe),
     Unsuback(Unsuback),
-    Pingreq,
-    Pingresp,
+    Pingreq(Pingreq),
+    Pingresp(Pingresp),
     Disconnect(Disconnect),
 }
 
@@ -57,8 +59,8 @@ impl Packet {
             SUBACK_PACKET_TYPE => Ok(Suback::read_from(stream, indetifier_byte[0])?),
             UNSUBSCRIBE_PACKET_TYPE => Ok(Unsubscribe::read_from(stream, indetifier_byte[0])?),
             UNSUBACK_PACKET_TYPE => Ok(Unsuback::read_from(stream, indetifier_byte[0])?),
-            // 0xc_ => { Ok(Pingreq::read_from(stream, indetifier_byte[0])?) }
-            // 0xd _ => { Ok(Pingresp::read_from(stream, indetifier_byte[0])?) }
+            PINGREQ_PACKET_TYPE => Ok(Pingreq::read_from(stream, indetifier_byte[0])?),
+            PINGRESP_PACKET_TYPE => Ok(Pingresp::read_from(stream, indetifier_byte[0])?),
             DISCONNECT_PACKET_TYPE => Ok(Disconnect::read_from(stream, indetifier_byte[0])?),
             _ => Err("Ningún packet tiene ese código".into()),
         }
@@ -105,15 +107,21 @@ impl Packet {
                 println!("Se manda el unsuback...");
                 unsuback.write_to(stream)
             }
+            
+            Packet::Pingreq(pingreq) => {
+                println!("Se manda el pingreq...");
+                pingreq.write_to(stream)
+            }
+
+            Packet::Pingresp(pingresp) => {
+                println!("Se manda el pingresp...");
+                pingresp.write_to(stream)
+            }
 
             Packet::Disconnect(disconnect) => {
                 println!("Se manda el disconnect...");
                 disconnect.write_to(stream)
             }
-
-            //...
-
-            _ => Err("Packet desconocido".into())
         }
     }
 }

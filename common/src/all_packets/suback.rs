@@ -111,7 +111,7 @@ impl ReadPacket for Suback {
 fn verify_suback_byte(byte: &u8) -> Result<(), String>{
     match *byte {
         SUBACK_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong Packet Type".to_string()),
+        _ => return Err("Wrong First Byte".to_string()),
     }
 
 }
