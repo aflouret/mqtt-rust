@@ -1,0 +1,3 @@
+Servidor escuchando: 8080
+Connect Packet received from: 0
+Connack packet send it to: 0
