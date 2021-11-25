@@ -9,12 +9,14 @@ use crate::parser::encode_mqtt_string;
 pub const PUBLISH_PACKET_TYPE: u8 = 0x30;
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct Publish {
-    flags: PublishFlags,
-    topic_name: String,
-    packet_id: Option<u16>,
-    application_message: String,
+    pub flags: PublishFlags,
+    pub topic_name: String,
+    pub packet_id: Option<u16>,
+    pub application_message: String,
 }
+
 
 impl Publish {
     pub fn new(flags: PublishFlags, topic_name: String, packet_id: Option<u16>, application_message: String) -> Publish {
@@ -125,10 +127,11 @@ fn verify_publish_flags(flags: &PublishFlags) -> Result<(), String> {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct PublishFlags {
-    duplicate: bool,
-    qos_level: Qos,
-    retain: bool,
+    pub duplicate: bool,
+    pub qos_level: Qos,
+    pub retain: bool,
 }
 
 //Falta checkear: If a Server or Client receives a PUBLISH Packet which has both QoS bits set to 1 it MUST close the Network Connection

@@ -9,6 +9,7 @@ use crate::all_packets::unsubscribe::{Unsubscribe, UNSUBSCRIBE_PACKET_TYPE};
 use crate::all_packets::unsuback::{Unsuback, UNSUBACK_PACKET_TYPE};
 use crate::all_packets::pingreq::{Pingreq, PINGREQ_PACKET_TYPE};
 use crate::all_packets::pingresp::{Pingresp, PINGRESP_PACKET_TYPE};
+use crate::parser::decode_mqtt_string;
 use std::io::{Read, Write};
 
 const PACKET_TYPE_BYTE: u8 = 0xF0;
@@ -18,6 +19,29 @@ const PACKET_TYPE_BYTE: u8 = 0xF0;
 pub enum Qos {
     AtMostOnce = 0,
     AtLeastOnce = 1,
+}
+
+#[derive(Debug)]
+pub struct Topic {
+    pub name: String,
+    pub qos: Qos,
+}
+
+impl Topic {
+    pub fn read_from(stream: &mut dyn Read) -> Result<Topic, std::io::Error> {
+        let topic_name = decode_mqtt_string(stream)?;
+        
+        let mut qos_level_bytes = [0u8; 1];
+        stream.read_exact(&mut qos_level_bytes)?;
+        let qos_level = u8::from_be_bytes(qos_level_bytes);
+
+        let qos = match qos_level {
+            0 => Qos::AtMostOnce,
+            _ => Qos::AtLeastOnce,
+        };
+
+        Ok(Topic{name: topic_name, qos})
+    }
 }
 
 pub trait ReadPacket {

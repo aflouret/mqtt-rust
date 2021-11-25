@@ -1,11 +1,12 @@
 use crate::session::Session;
 use common::all_packets::connack::Connack;
 use common::all_packets::connect::Connect;
-use common::packet::{Packet, WritePacket};
+use common::packet::{Packet, WritePacket, Qos};
 use std::net::{TcpStream};
 use std::collections::HashMap;
 use std::error::Error;
-use common::all_packets::publish::Publish;
+use std::ops::RangeBounds;
+use common::all_packets::publish::{self, Publish};
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex};
 use std::sync::mpsc::{Receiver, Sender};
@@ -41,7 +42,11 @@ impl PacketProcessor {
                 if let Ok((id, packet)) = self.rx.recv() {
                     
                     match packet {
-                        Ok(packet) => self.process_packet(packet, id).unwrap(),
+                        Ok(packet) => {
+                            if let Err(_) = self.process_packet(packet, id) {
+                                self.handle_disconnect_error(id);
+                            }
+                        },
                         Err(_) => self.handle_disconnect_error(id),
                     }
 
@@ -62,6 +67,8 @@ impl PacketProcessor {
 
         let mut senders_hash = self.senders_to_c_h_writers.write().unwrap();
         senders_hash.remove(&id).unwrap();
+
+        println!("disconnect handled");
     }
 
     pub fn process_packet(&mut self, packet: Packet, id: u32) -> Result<(), Box<dyn std::error::Error>> {
@@ -70,28 +77,33 @@ impl PacketProcessor {
                     self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(),id.to_string()));
                     println!("Recibi el Connect (en process_pracket)");
                     let connack_packet = self.handle_connect_packet(connect_packet, id)?;
-                    Ok(Packet::Connack(connack_packet))
+                    Some(Ok(Packet::Connack(connack_packet)))
                 }
 
                 Packet::Publish(publish_packet) => {
                     self.logger.log_msg(LogMessage::new("Publish Packet received from:".to_string(),id.to_string()));
-                    //TODO: self.handle_publish_packet(publish_packet)?;
-                    let puback_packet = Puback::new(1);
-                    Ok(Packet::Puback(puback_packet))
+                    let puback_packet = self.handle_publish_packet(publish_packet, id)?;
+                    if let Some(puback_packet) = puback_packet {
+                        Some(Ok(Packet::Puback(puback_packet)))
+                    } else {
+                        None
+                    }
                 },
 
                 _ => { return Err("Invalid packet".into()) },
             };
-
-        let senders_hash = self.senders_to_c_h_writers.read().unwrap();
-        let sender = senders_hash.get(&id).unwrap();
-        let sender_mutex_guard = sender.lock().unwrap();
-        sender_mutex_guard.send(response_packet).unwrap();
+        
+        if let Some(response_packet) = response_packet{
+            let senders_hash = self.senders_to_c_h_writers.read().unwrap();
+            let sender = senders_hash.get(&id).unwrap();
+            let sender_mutex_guard = sender.lock().unwrap();
+            sender_mutex_guard.send(response_packet).unwrap();
+        }
         
         Ok(())
     }
     
-    /*pub fn handle_publish_packet(&mut self, publish_packet: Publish) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn handle_publish_packet(&mut self, publish_packet: Publish, id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
         println!("Se recibió el publish packet");
         //Sacamos el packet_id del pubblish
         //Sacar info del publish
@@ -100,12 +112,30 @@ impl PacketProcessor {
         let packet_id = 1 as u16;
         let puback_packet_response = Puback::new(packet_id);
         let current_session = self.clients.get_mut("u").unwrap(); //TODO: sacar unwrap
-        let mut socket = current_session.get_socket().try_clone().unwrap();
-        println!("{:?}",socket);
-        puback_packet_response.write_to(&mut socket)?;
+        let topic_name = &publish_packet.topic_name;
+
+        let publish_send = publish_packet.clone();
+
+        for (id, session) in &self.clients {
+            if session.is_subscribed_to(&topic_name) {
+                if let Some(client_handler_id) = session.get_client_handler_id() {
+                    let senders_hash = self.senders_to_c_h_writers.read().unwrap();
+                    let sender = senders_hash.get(&client_handler_id).unwrap();
+                    let sender_mutex_guard = sender.lock().unwrap();
+                    sender_mutex_guard.send(Ok(Packet::Publish(publish_send.clone()))).unwrap();
+                }
+            }
+        }
         println!("Se envio correctamente el PUBACK");
-        Ok(())
-    }*/
+
+        if publish_packet.flags.qos_level == Qos::AtMostOnce {
+            Ok(None)
+        } else {
+            Ok(Some(Puback::new(publish_packet.packet_id.unwrap())))
+        }
+        
+        
+    }
     
     pub fn handle_connect_packet(&mut self, connect_packet: Connect, client_handler_id: u32) -> Result<Connack, Box<dyn std::error::Error>> {
         println!("Se recibió el connect packet");
@@ -115,8 +145,15 @@ impl PacketProcessor {
         let exists_previous_session = self.clients.contains_key(&client_id);
     
         // Si hay un cliente con mismo client_id conectado, lo desconectamos
-        if let Some(previous_session) = self.clients.get_mut(&client_id){
-            previous_session.disconnect();            
+        if let Some(previous_session) = self.clients.get(&client_id){
+            if previous_session.is_active() {
+                let previous_handler_id = previous_session.get_client_handler_id().unwrap();
+                self.handle_disconnect_error(previous_handler_id);
+                //self.handle_disconnect_error(client_handler_id);
+                println!("El cliente ya estaba conectado");
+                return Err("El cliente ya estaba conectado".into())
+
+            }
         }
     
         // Si no se quiere conexión persistente o no había una sesión con mismo client_id, creamos una nueva

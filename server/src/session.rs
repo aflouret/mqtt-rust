@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::net::TcpStream;
 use common::all_packets::connect::Connect;
-use common::packet::Packet;
+use common::packet::{Packet, Topic};
 
 //Manjea datos del cliente
 pub struct Session {
     client_handler_id: Option<u32>,
     client_data: ClientData,
     client_packets: Vec<Packet>,
-    client_subscriptions: Vec<Subscription>,
+    client_subscriptions: Vec<Topic>,
     not_fully_transmitted_messages: Vec<NotFullyTransmittedMessages>
 }
 
@@ -45,6 +45,15 @@ impl Session {
     pub fn disconnect(&mut self) {
         self.client_handler_id = None;
     }
+
+    pub fn is_subscribed_to(&self, topic_name: &String) -> bool {
+        for topic in &self.client_subscriptions {
+            if &topic.name == topic_name {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 fn parse_connect_data(packet_connect: Connect) -> ClientData {
@@ -63,7 +72,6 @@ pub struct ClientData{
 
 /* ---------------------------------------------------------- */
 
-pub struct Subscription;
 
 pub enum NotFullyTransmittedMessages {
     // QoS1 messages sent to the Client, but not been completely acknowledged

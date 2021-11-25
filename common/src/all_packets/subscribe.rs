@@ -1,4 +1,4 @@
-use crate::packet::{Packet, ReadPacket, WritePacket, Qos};
+use crate::packet::{Packet, ReadPacket, WritePacket, Qos, Topic};
 use std::io::{Cursor, Read, Write};
 use crate::parser::{encode_mqtt_string, decode_remaining_length, decode_mqtt_string, encode_remaining_length};
 use std::io::ErrorKind::UnexpectedEof;
@@ -7,28 +7,7 @@ pub const SUBSCRIBE_PACKET_TYPE: u8 = 0x80;
 const SUBSCRIBE_FIRST_BYTE: u8 = 0x82;
 const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
-#[derive(Debug)]
-pub struct Topic {
-    name: String,
-    qos: Qos,
-}
 
-impl Topic {
-    fn read_from(stream: &mut dyn Read) -> Result<Topic, std::io::Error> {
-        let topic_name = decode_mqtt_string(stream)?;
-        
-        let mut qos_level_bytes = [0u8; 1];
-        stream.read_exact(&mut qos_level_bytes)?;
-        let qos_level = u8::from_be_bytes(qos_level_bytes);
-
-        let qos = match qos_level {
-            0 => Qos::AtMostOnce,
-            _ => Qos::AtLeastOnce,
-        };
-
-        Ok(Topic{name: topic_name, qos})
-    }
-}
 
 #[derive(Debug)]
 pub struct Subscribe {
