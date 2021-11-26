@@ -55,7 +55,10 @@ impl PacketProcessor {
         let response_packet = match packet {
                 Packet::Connect(connect_packet) => {
                     self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(),id.to_string()));
-                    println!("Recibi el Connect (en process_pracket)");
+                    if let Some(usr) = &connect_packet.connect_payload.username {
+                        println!("Recibi el Connect (en process_pracket) del user: {:?} ",usr);
+                    }
+                    /*println!("Recibi el Connect (en process_pracket) del user: {:?} ",&connect_packet.connect_payload.username);*/
                     let connack_packet = self.handle_connect_packet(connect_packet, id)?;
                     Ok(Packet::Connack(connack_packet))
                 }

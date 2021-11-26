@@ -7,3 +7,5 @@ edition = "2018"
 
 [dependencies]
 common = { path = "../common" }
+gtk = "0.14"
+glib = "^0"
