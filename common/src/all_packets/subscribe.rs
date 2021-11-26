@@ -1,4 +1,4 @@
-use crate::packet::{Packet, ReadPacket, WritePacket, Qos, Topic};
+use crate::packet::{Packet, ReadPacket, WritePacket, Qos, Subscription};
 use std::io::{Cursor, Read, Write};
 use crate::parser::{encode_mqtt_string, decode_remaining_length, decode_mqtt_string, encode_remaining_length};
 use std::io::ErrorKind::UnexpectedEof;
@@ -11,20 +11,20 @@ const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
 #[derive(Debug)]
 pub struct Subscribe {
-    topics: Vec<Topic>,
+    subscriptions: Vec<Subscription>,
     packet_id: u16,
 }
 
 impl Subscribe {
-    pub fn new(packet_id: u16, initial_topic: Topic) -> Subscribe {
+    pub fn new(packet_id: u16, initial_subscription: Subscription) -> Subscribe {
         Subscribe {
-            topics: vec![initial_topic],
+            subscriptions: vec![initial_subscription],
             packet_id,
         }
     }
 
-    pub fn add_topic(&mut self, topic: Topic){
-        self.topics.push(topic);
+    pub fn add_subscription(&mut self, subscription: Subscription){
+        self.subscriptions.push(subscription);
     }
 
     fn get_remaining_length(&self) -> Result<u32, String> {  
@@ -32,8 +32,8 @@ impl Subscribe {
         let mut length = VARIABLE_HEADER_REMAINING_LENGTH;
 
         //PAYLOAD
-        for topic in &self.topics {
-            length += (encode_mqtt_string(&topic.name)?.len() + (topic.qos as u8).to_be_bytes().len()) as u8;
+        for subscription in &self.subscriptions {
+            length += (encode_mqtt_string(&subscription.topic_filter)?.len() + (subscription.max_qos as u8).to_be_bytes().len()) as u8;
         }
 
         Ok(length as u32)
@@ -58,13 +58,13 @@ impl WritePacket for Subscribe {
         stream.write_all(&packet_id_bytes)?;
         
         //PAYLOAD
-        for topic in &self.topics {
-            let encoded_name = encode_mqtt_string(&topic.name)?;
+        for subscription in &self.subscriptions {
+            let encoded_name = encode_mqtt_string(&subscription.topic_filter)?;
             for byte in &encoded_name {
                 stream.write_all(&[*byte])?;
             }
 
-            let qos_bytes = (topic.qos as u8).to_be_bytes();
+            let qos_bytes = (subscription.max_qos as u8).to_be_bytes();
             stream.write_all(&qos_bytes)?;
         }
 
@@ -85,15 +85,15 @@ impl ReadPacket for Subscribe {
         remaining_bytes.read_exact(&mut packet_identifier_bytes)?;
         let packet_identifier = u16::from_be_bytes(packet_identifier_bytes);
     
-        let initial_topic = Topic::read_from(&mut remaining_bytes)?;
-        let mut packet_subscribe = Subscribe::new(packet_identifier, initial_topic);
+        let initial_subscription = Subscription::read_from(&mut remaining_bytes)?;
+        let mut packet_subscribe = Subscribe::new(packet_identifier, initial_subscription);
         loop {
-            match Topic::read_from(&mut remaining_bytes){
+            match Subscription::read_from(&mut remaining_bytes){
                 Err(e) => match e.kind(){
                     UnexpectedEof => return Ok(Packet::Subscribe(packet_subscribe)),
                     _ => return Err(Box::new(e)),
                 },
-                Ok(topic) => packet_subscribe.add_topic(topic),
+                Ok(subscription) => packet_subscribe.add_subscription(subscription),
             }
         }
     }
@@ -114,10 +114,10 @@ mod tests {
     fn correct_remaining_length() {
         let mut subscribe = Subscribe::new(
             10,
-            Topic{name: String::from("test"), qos: Qos::AtMostOnce}
+            Subscription{topic_filter: String::from("test"), max_qos: Qos::AtMostOnce}
         );
 
-        subscribe.add_topic(Topic{name: String::from("otro topic"), qos: Qos::AtLeastOnce});
+        subscribe.add_subscription(Subscription{topic_filter: String::from("otro topic"), max_qos: Qos::AtLeastOnce});
         let to_test = subscribe.get_remaining_length().unwrap();
         assert_eq!(to_test, 22);
     }
@@ -126,7 +126,7 @@ mod tests {
     fn correct_subscribe_packet() {
         let mut subscribe_packet = Subscribe::new(
             73, 
-            Topic{name: String::from("otro test"), qos: Qos::AtLeastOnce}
+            Subscription{topic_filter: String::from("otro test"), max_qos: Qos::AtLeastOnce}
         );
         let mut buff = Cursor::new(Vec::new());
         subscribe_packet.write_to(&mut buff).unwrap();
@@ -134,9 +134,9 @@ mod tests {
         let to_test = Subscribe::read_from(&mut buff, 0x82).unwrap();
         if let Packet::Subscribe(to_test) = to_test {
             assert_eq!(to_test.packet_id, subscribe_packet.packet_id);
-            if let Some(topic) = subscribe_packet.topics.pop(){
-                assert_eq!(topic.name, "otro test".to_string());
-                assert_eq!(topic.qos, Qos::AtLeastOnce);
+            if let Some(subscription) = subscribe_packet.subscriptions.pop(){
+                assert_eq!(subscription.topic_filter, "otro test".to_string());
+                assert_eq!(subscription.max_qos, Qos::AtLeastOnce);
             }
         }
     }
@@ -145,7 +145,7 @@ mod tests {
     fn error_wrong_first_byte() {
         let subscribe_packet = Subscribe::new(
             73,
-            Topic{name: String::from("otro test"), qos: Qos::AtLeastOnce}
+            Subscription{topic_filter: String::from("otro test"), max_qos: Qos::AtLeastOnce}
         );
         let mut buff = Cursor::new(Vec::new());
         subscribe_packet.write_to(&mut buff).unwrap();

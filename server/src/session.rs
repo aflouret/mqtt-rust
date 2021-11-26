@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 use std::net::TcpStream;
 use common::all_packets::connect::Connect;
-use common::packet::{Packet, Topic};
+use common::packet::{Packet, Subscription};
+use crate::topic_filters;
+
 
 //Manjea datos del cliente
 pub struct Session {
     client_handler_id: Option<u32>,
     client_data: ClientData,
     client_packets: Vec<Packet>,
-    client_subscriptions: Vec<Topic>,
+    client_subscriptions: Vec<Subscription>,
     not_fully_transmitted_messages: Vec<NotFullyTransmittedMessages>
 }
 
@@ -47,13 +49,13 @@ impl Session {
     }
 
     pub fn is_subscribed_to(&self, topic_name: &String) -> bool {
-        for topic in &self.client_subscriptions {
-            if &topic.name == topic_name {
+        for subscription in &self.client_subscriptions {
+            if topic_filters::filter_matches_topic(&subscription.topic_filter, topic_name) {
                 return true;
             }
         }
         return false;
-    }
+    }   
 }
 
 fn parse_connect_data(packet_connect: Connect) -> ClientData {

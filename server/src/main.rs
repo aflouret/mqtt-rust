@@ -8,6 +8,7 @@ mod server;
 mod session;
 mod client_handler;
 mod packet_processor;
+mod topic_filters;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new();
