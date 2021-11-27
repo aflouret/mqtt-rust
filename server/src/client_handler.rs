@@ -1,3 +1,4 @@
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use common::packet::{Packet, WritePacket};
 use std::sync::{Mutex, mpsc};
@@ -8,7 +9,8 @@ use std::collections::HashMap;
 
 pub struct ClientHandler {
     id: u32,
-    stream: Option<TcpStream>,
+    stream_write: Option<Box<dyn Write + Send>>,
+    stream_read: Option<Box<dyn Read + Send>>,
     sender: Option<Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>>,
     receiver: Option<Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>>,
 }
@@ -16,7 +18,8 @@ pub struct ClientHandler {
 impl ClientHandler {
     pub fn new(
         id: u32,
-        stream: TcpStream,
+        stream_write: Box<dyn Write + Send>,
+        stream_read: Box<dyn Read + Send>,
         senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>>>,
         sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
     ) -> ClientHandler {
@@ -26,21 +29,23 @@ impl ClientHandler {
 
         ClientHandler {
             id,
-            stream: Some(stream),
+            stream_write: Some(stream_write),
+            stream_read: Some(stream_read),
             sender: Some(sender),
             receiver: Some(c_h_writer_rx),
         }
     }
 
     pub fn run(mut self) -> Result<JoinHandle<()>, Box<dyn std::error::Error>> {
-        let stream = self.stream.take().unwrap();
+        let stream_write = self.stream_write.take().unwrap();
+        let stream_read = self.stream_read.take().unwrap();
 
 
         let receiver = self.receiver.take().unwrap();
         let sender = self.sender.take().unwrap();
 
-        let mut client_handler_writer = ClientHandlerWriter::new(stream.try_clone()?, receiver);
-        let mut client_handler_reader = ClientHandlerReader::new(self.id, stream, sender);
+        let mut client_handler_writer = ClientHandlerWriter::new(stream_write , receiver);
+        let mut client_handler_reader = ClientHandlerReader::new(self.id, stream_read, sender);
 
         let writer_join_handle = thread::spawn(move || {
 
@@ -70,12 +75,12 @@ impl ClientHandler {
 //LEE EN CHANNEL, ESCRIBE EN SOCKET
 struct ClientHandlerWriter {
     //Maneja la conexion del socket
-    socket: TcpStream,
+    socket: Box<dyn Write + Send>,
     receiver: Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>, //Por acá recibe los paquetes que escribe en el socket
 }
 
 impl ClientHandlerWriter {
-    pub fn new(socket: TcpStream, receiver: Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>) -> ClientHandlerWriter {
+    pub fn new(socket: Box<dyn Write + Send>, receiver: Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>) -> ClientHandlerWriter {
         ClientHandlerWriter {
             socket,
             receiver,
@@ -94,12 +99,12 @@ impl ClientHandlerWriter {
 //LEE DE SOCKET, ESCRIBE EN CHANNEL
 struct ClientHandlerReader {
     id: u32,
-    socket: TcpStream,
+    socket: Box<dyn Read + Send>,
     sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,//Por acá manda paquetes al sv
 }
 
 impl ClientHandlerReader {
-    pub fn new(id: u32, socket: TcpStream, sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>) -> ClientHandlerReader {
+    pub fn new(id: u32, socket: Box<dyn Read + Send>, sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>) -> ClientHandlerReader {
         ClientHandlerReader {
             id,
             socket,

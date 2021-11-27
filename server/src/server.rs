@@ -45,7 +45,8 @@ impl Server {
 
         for stream in listener.incoming() {
             if let Ok(stream) = stream {
-                let client_handler = ClientHandler::new(id, stream, senders_to_c_h_writers.clone(), c_h_reader_tx.clone());
+                let stream_write = stream.try_clone().unwrap();
+                let client_handler = ClientHandler::new(id, Box::new(stream_write), Box::new(stream), senders_to_c_h_writers.clone(), c_h_reader_tx.clone());
                 
                 if let Ok(join_handle) = client_handler.run() {
                     join_handles.push(join_handle);
