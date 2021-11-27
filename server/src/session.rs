@@ -57,17 +57,17 @@ impl Session {
         return false;
     }  
     
-    pub fn add_subscription(&mut self, subscription: Subscription) {
+    pub fn add_subscription(&mut self, mut subscription: Subscription) {
         if subscription.max_qos ==  Qos::ExactlyOnce{
             subscription.max_qos = Qos::AtLeastOnce;
         }
 
-        for (index, s) in self.client_subscriptions.iter().enumerate() {
-            if s.topic_filter == subscription.topic_filter {
-                self.client_subscriptions.remove(index);
-            }
-        }
+        self.client_subscriptions.retain(|s| s.topic_filter != subscription.topic_filter);
         self.client_subscriptions.push(subscription);
+    }
+
+    pub fn remove_subscription(&mut self, topic_filter: String) {
+        self.client_subscriptions.retain(|s| s.topic_filter != topic_filter);
     }
 }
 

@@ -50,7 +50,7 @@ impl Suback {
         Ok(length as u32)
     }
 
-    fn add_return_code(&mut self, code: SubackReturnCode){
+    pub fn add_return_code(&mut self, code: SubackReturnCode){
         self.return_codes.push(code);
     }
 }

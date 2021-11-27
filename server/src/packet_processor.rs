@@ -1,6 +1,8 @@
 use crate::session::Session;
 use common::all_packets::connack::Connack;
 use common::all_packets::connect::Connect;
+use common::all_packets::unsuback::Unsuback;
+use common::all_packets::unsubscribe::Unsubscribe;
 use common::packet::{Packet, WritePacket, Qos};
 use std::net::{TcpStream};
 use std::collections::HashMap;
@@ -94,7 +96,7 @@ impl PacketProcessor {
 
                 Packet::Subscribe(subscribe_packet) => {
                     self.logger.log_msg(LogMessage::new("Subscribe Packet received from:".to_string(),id.to_string()));
-                    let suback_packet = self.handle_subscribe_packet(publish_packet, id)?;
+                    let suback_packet = self.handle_subscribe_packet(subscribe_packet, id)?;
                     Some(Ok(Packet::Suback(suback_packet)))
                 },
 
@@ -111,6 +113,25 @@ impl PacketProcessor {
         Ok(())
     }
 
+    pub fn handle_unsubscribe_packet(&mut self, unsubscribe_packet: Unsubscribe, id: u32) -> Result<Unsuback, Box<dyn std::error::Error>> {
+        println!("Se recibió el subscribe packet");
+    
+        let unsuback_packet = Unsuback::new(unsubscribe_packet.packet_id);
+        for subscription in unsubscribe_packet.topics {
+            for (_, session) in &mut self.clients {
+                if let Some(client_handler_id)  = session.get_client_handler_id() {
+                    if client_handler_id == id {
+                        session.remove_subscription(subscription);
+                        break;
+                    }
+                } 
+            }
+        }
+        
+        Ok(unsuback_packet)
+        
+    }
+
     pub fn handle_subscribe_packet(&mut self, subscribe_packet: Subscribe, id: u32) -> Result<Suback, Box<dyn std::error::Error>> {
         println!("Se recibió el subscribe packet");
     
@@ -118,10 +139,10 @@ impl PacketProcessor {
 
         let suback_packet = Suback::new(subscribe_packet.packet_id);
         for subscription in subscribe_packet.subscriptions {
-            for (_, session) in self.clients {
+            for (_, session) in &mut self.clients {
                 if let Some(client_handler_id)  = session.get_client_handler_id() {
                     if client_handler_id == id {
-                        if subscription_is_valid() == false {
+                        /*if subscription_is_valid() == false {
                             let return_code = SubackReturnCode::Failure;
                             suback_packet.add_return_code(return_code);
                         } else {
@@ -131,7 +152,7 @@ impl PacketProcessor {
                             };
                             session.add_subscription(subscription);
                             suback_packet.add_return_code(return_code)
-                        }
+                        }*/
 
                         break;
                     }

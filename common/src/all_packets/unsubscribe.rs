@@ -8,8 +8,8 @@ const UNSUBSCRIBE_FIRST_BYTE: u8 = 0xa2;
 const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
 pub struct Unsubscribe{
-    topics: Vec<String>,
-    packet_id: u16,
+    pub topics: Vec<String>,
+    pub packet_id: u16,
 }
 
 impl Unsubscribe {
