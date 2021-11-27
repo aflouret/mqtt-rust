@@ -5,7 +5,7 @@ use common::packet::{Packet, WritePacket, Qos};
 use std::net::{TcpStream};
 use std::collections::HashMap;
 use std::error::Error;
-use std::ops::RangeBounds;
+use std::ops::{RangeBounds, Sub};
 use common::all_packets::publish::{self, Publish};
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex};
@@ -13,6 +13,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use common::logging::logger::{Logger, LogMessage};
+use common::all_packets::suback::{Suback, SubackReturnCode};
+use common::all_packets::subscribe::Subscribe;
 
 
 pub struct PacketProcessor {
@@ -90,6 +92,12 @@ impl PacketProcessor {
                     }
                 },
 
+                Packet::Subscribe(subscribe_packet) => {
+                    self.logger.log_msg(LogMessage::new("Subscribe Packet received from:".to_string(),id.to_string()));
+                    let suback_packet = self.handle_subscribe_packet(publish_packet, id)?;
+                    Some(Ok(Packet::Suback(suback_packet)))
+                },
+
                 _ => { return Err("Invalid packet".into()) },
             };
         
@@ -101,6 +109,38 @@ impl PacketProcessor {
         }
         
         Ok(())
+    }
+
+    pub fn handle_subscribe_packet(&mut self, subscribe_packet: Subscribe, id: u32) -> Result<Suback, Box<dyn std::error::Error>> {
+        println!("Se recibió el subscribe packet");
+    
+
+
+        let suback_packet = Suback::new(subscribe_packet.packet_id);
+        for subscription in subscribe_packet.subscriptions {
+            for (_, session) in self.clients {
+                if let Some(client_handler_id)  = session.get_client_handler_id() {
+                    if client_handler_id == id {
+                        if subscription_is_valid() == false {
+                            let return_code = SubackReturnCode::Failure;
+                            suback_packet.add_return_code(return_code);
+                        } else {
+                            let return_code = match subscription.max_qos {
+                                Qos::AtMostOnce => SubackReturnCode::SuccessAtMostOnce,
+                                _ => SubackReturnCode::SuccessAtLeastOnce,
+                            };
+                            session.add_subscription(subscription);
+                            suback_packet.add_return_code(return_code)
+                        }
+
+                        break;
+                    }
+                } 
+            }
+        }
+        
+        Ok(suback_packet)
+        
     }
     
     pub fn handle_publish_packet(&mut self, publish_packet: Publish, id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {

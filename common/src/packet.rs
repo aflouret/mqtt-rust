@@ -19,6 +19,7 @@ const PACKET_TYPE_BYTE: u8 = 0xF0;
 pub enum Qos {
     AtMostOnce = 0,
     AtLeastOnce = 1,
+    ExactlyOnce = 2,
 }
 
 #[derive(Debug)]

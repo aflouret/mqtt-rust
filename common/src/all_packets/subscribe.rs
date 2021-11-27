@@ -11,8 +11,8 @@ const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
 #[derive(Debug)]
 pub struct Subscribe {
-    subscriptions: Vec<Subscription>,
-    packet_id: u16,
+    pub subscriptions: Vec<Subscription>,
+    pub packet_id: u16,
 }
 
 impl Subscribe {

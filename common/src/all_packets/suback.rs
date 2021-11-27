@@ -36,10 +36,10 @@ pub struct Suback {
 }
 
 impl Suback {
-    pub fn new(packet_id: u16, initial_code: SubackReturnCode) -> Suback{
+    pub fn new(packet_id: u16) -> Suback{
         Suback {
             packet_id,
-            return_codes: vec![initial_code],
+            return_codes: vec![],
         }
     }
 
@@ -94,8 +94,7 @@ impl ReadPacket for Suback {
         remaining_bytes.read_exact(&mut packet_identifier_bytes)?;
         let packet_identifier = u16::from_be_bytes(packet_identifier_bytes);
     
-        let initial_return_code = SubackReturnCode::read_from(&mut remaining_bytes)?;
-        let mut suback_packet = Suback::new(packet_identifier, initial_return_code);
+        let mut suback_packet = Suback::new(packet_identifier);
         loop {
             match SubackReturnCode::read_from(&mut remaining_bytes){
                 Err(e) => match e.kind(){
@@ -122,7 +121,8 @@ mod tests {
 
     #[test]
     fn correct_remaining_length() {
-        let mut suback_packet = Suback::new(50, SubackReturnCode::SuccessAtMostOnce);
+        let mut suback_packet = Suback::new(50);
+        suback_packet.add_return_code(SubackReturnCode::SuccessAtMostOnce);
         suback_packet.add_return_code(SubackReturnCode::SuccessAtLeastOnce);
         suback_packet.add_return_code(SubackReturnCode::Failure);
 
@@ -132,7 +132,8 @@ mod tests {
 
     #[test]
     fn correct_suback_packet() {
-        let mut suback_packet = Suback::new(73, SubackReturnCode::SuccessAtLeastOnce);
+        let mut suback_packet = Suback::new(73);
+        suback_packet.add_return_code(SubackReturnCode::SuccessAtLeastOnce);
         suback_packet.add_return_code(SubackReturnCode::SuccessAtMostOnce);
         let mut buff = Cursor::new(Vec::new());
         suback_packet.write_to(&mut buff).unwrap();
@@ -146,7 +147,8 @@ mod tests {
 
     #[test]
     fn error_wrong_first_byte(){
-        let suback_packet = Suback::new(73, SubackReturnCode::SuccessAtLeastOnce);
+        let mut suback_packet = Suback::new(73);
+        suback_packet.add_return_code(SubackReturnCode::SuccessAtLeastOnce);
         let mut buff = Cursor::new(Vec::new());
         suback_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);

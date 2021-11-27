@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::TcpStream;
 use common::all_packets::connect::Connect;
-use common::packet::{Packet, Subscription};
+use common::packet::{Packet, Subscription, Qos};
 use crate::topic_filters;
 
 
@@ -55,7 +55,20 @@ impl Session {
             }
         }
         return false;
-    }   
+    }  
+    
+    pub fn add_subscription(&mut self, subscription: Subscription) {
+        if subscription.max_qos ==  Qos::ExactlyOnce{
+            subscription.max_qos = Qos::AtLeastOnce;
+        }
+
+        for (index, s) in self.client_subscriptions.iter().enumerate() {
+            if s.topic_filter == subscription.topic_filter {
+                self.client_subscriptions.remove(index);
+            }
+        }
+        self.client_subscriptions.push(subscription);
+    }
 }
 
 fn parse_connect_data(packet_connect: Connect) -> ClientData {
