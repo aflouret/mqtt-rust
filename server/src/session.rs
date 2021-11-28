@@ -11,20 +11,21 @@ pub struct Session {
     client_data: ClientData,
     client_packets: Vec<Packet>,
     client_subscriptions: Vec<Subscription>,
-    not_fully_transmitted_messages: Vec<NotFullyTransmittedMessages>
+    not_fully_transmitted_messages: Vec<NotFullyTransmittedMessages>,
+    pub is_clean_session: bool
 }
 
 impl Session {
     pub fn new(client_handler_id: u32, packet_connect: Connect) -> Result<Session, Box<dyn std::error::Error>> {
-        let client_data = parse_connect_data(packet_connect);
-
+        let client_data = parse_connect_data(&packet_connect);
+        
         Ok(Session {
             client_handler_id: Some(client_handler_id),
             client_data,
             client_packets: vec![],
             client_subscriptions: vec![],
             not_fully_transmitted_messages: vec![],
-            
+            is_clean_session: packet_connect.clean_session
         })
     }
 
@@ -71,11 +72,11 @@ impl Session {
     }
 }
 
-fn parse_connect_data(packet_connect: Connect) -> ClientData {
+fn parse_connect_data(packet_connect: &Connect) -> ClientData {
     ClientData{
-        client_id: packet_connect.connect_payload.client_id,
-        username: packet_connect.connect_payload.username,
-        password: packet_connect.connect_payload.password,
+        client_id: packet_connect.connect_payload.client_id.to_owned(),
+        username: packet_connect.connect_payload.username.clone(),
+        password: packet_connect.connect_payload.password.clone(),
     }
 }
 

@@ -65,6 +65,10 @@ impl ClientHandler {
             }
             reader_join_handle.join().unwrap();
             println!("writer destroyed");
+            //Ojo, creeeo que: si se cierra el writer, se hace join handle del reader y eso esta mal, porque
+            // se va a estar leyendo paquetes y mandandolos al process packet que los procesa y los 
+            // envia para aca, pero como no hay nadie leyendo del channel se van a acumular ahi y nunca se envian al 
+            // cliente
         });
 
         Ok(writer_join_handle)
