@@ -10,7 +10,7 @@ use crate::all_packets::unsuback::{Unsuback, UNSUBACK_PACKET_TYPE};
 use crate::all_packets::pingreq::{Pingreq, PINGREQ_PACKET_TYPE};
 use crate::all_packets::pingresp::{Pingresp, PINGRESP_PACKET_TYPE};
 use crate::parser::decode_mqtt_string;
-use std::io::{Read, Write};
+use std::io::{Read, Write, Error, ErrorKind::Other};
 
 const PACKET_TYPE_BYTE: u8 = 0xF0;
 
@@ -29,11 +29,16 @@ pub struct Subscription {
 }
 
 impl Subscription {
-    pub fn read_from(stream: &mut dyn Read) -> Result<Subscription, std::io::Error> {
+    pub fn read_from(stream: &mut dyn Read) -> Result<Subscription, Box<std::io::Error>> {
         let topic_filter = decode_mqtt_string(stream)?;
         
         let mut qos_level_bytes = [0u8; 1];
         stream.read_exact(&mut qos_level_bytes)?;
+
+        if qos_level_bytes[0] & 0xFA != 0 {
+            return Err(Box::new(Error::new(Other, "The upper 6 bits of the Requested QoS byte should be 0")));
+        }
+
         let qos_level = u8::from_be_bytes(qos_level_bytes);
 
         let max_qos = match qos_level {
