@@ -38,18 +38,6 @@ impl Client {
     ) -> Result<(), Box<dyn std::error::Error>> {*/
 
     pub fn client_run(&mut self, recv_from_window: Receiver<Packet>) -> Result<(), Box<dyn std::error::Error>> {
-        // handle connection,
-/*        if let Some(socket_writer) =  &mut self.server_stream {
-            connect_packet.write_to(socket_writer)?;
-        }
-        println!("Se envió el connect packet");
-        if let Some(socket_reader) = &mut self.server_stream {
-            let received_packet = Packet::read_from(socket_reader)?;
-            if let Packet::Connack(_connack_packet) = received_packet {
-                println!("Se recibió el connack packet");
-            }
-        }*/
-
         if let Some(socket) = &mut self.server_stream {
             let mut server_stream_write = socket.try_clone()?;
             let mut server_stream_read = socket.try_clone()?;
@@ -68,7 +56,14 @@ impl Client {
                                 println!("{:?}",&connect);
                                 connect.write_to(&mut server_stream_write)
                             },
-                            Packet::Publish(publish) => publish.write_to(&mut server_stream_write),
+                            Packet::Publish(publish) => {
+                                println!("{:?}",&publish);
+                                publish.write_to(&mut server_stream_write)
+                            },
+                            Packet::Subscribe(subscribe) => {
+                                println!("{:?}",&subscribe);
+                                subscribe.write_to(&mut server_stream_write)
+                            },
                             _ => Err("Invalid packet".into()),
                         };
                     }
@@ -79,9 +74,18 @@ impl Client {
             let handler_read = thread::spawn(move || {
                 loop {
                     let receiver_packet = Packet::read_from(&mut server_stream_read).unwrap();
-                    if let Packet::Puback(_puback_packet) = &receiver_packet {
-                        println!("Thread-Lectura: Se recibió el puback packet");
-                    }
+                    match receiver_packet {
+                        Packet::Connack(connect) => {
+                            println!("Client: Connack packet successfull received");
+                        },
+                        Packet::Puback(publish) => {
+                            println!("Client: Connack packet successfull received");
+                        },
+                        Packet::Suback(subscribe) => {
+                            println!("Client: Connack packet successfull received");
+                        },
+                        _ => (),
+                    };
                     //&self.send_to_window.send(receiver_packet);
                     //REcibimos la respuesta mandarsela por channel o por lo que fuera al clienthandler,
                     //para que se la muestra a la interfaz grafica
