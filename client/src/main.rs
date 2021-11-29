@@ -26,7 +26,8 @@ fn main() {
     let application = gtk::Application::new(Some("com.taller.pong"), Default::default());
 
     application.connect_activate(|app| {
-        setup(app);
+        let builder = build_ui(app);
+        setup(builder);
     });
 
     application.run();
@@ -39,39 +40,55 @@ fn main() {
 
 
 }*/
-
-fn setup(app: &gtk::Application) {
+///Devuelve un objeto gtk::Builder al levantar un .glade
+fn build_ui(app: &gtk::Application) -> gtk::Builder {
     let glade_src = include_str!("interface.glade");
-    let builder = gtk::Builder::from_string(glade_src);
-
+    let mut builder = gtk::Builder::from_string(glade_src);
     let window: gtk::Window = builder.object("main_window").unwrap();
-    let (sender, recv) = mpsc::channel::<Packet>();
-/*    let mut main_window = MainWindow::new(builder.clone(),sender.clone()).unwrap();
-    main_window.build();*/
-    handle_connect_tab(builder.clone(), sender.clone());
-    handle_publish_tab(builder.clone(), sender.clone());
-    handle_subscribe_tab(builder, sender);
-   // main_window.handle_publish_tab(sender);
-    let mut client = Client::new("User".to_owned(), "127.0.0.1:8080").unwrap();
-    thread::spawn(move || {
-        client.client_run(recv);
-    });
-
     window.set_application(Some(app));
     window.show_all();
+    builder
+}
+
+fn setup(builder: gtk::Builder) {
+    let (sender, recv) = mpsc::channel::<Packet>();
+    let (client_sender, window_recv) = mpsc::channel::<String>();
+    /*    let mut main_window = MainWindow::new(builder.clone(),sender.clone()).unwrap();
+        main_window.build();*/
+    handle_connect_tab(builder.clone(), sender.clone());
+    handle_publish_tab(builder.clone(), sender.clone());
+    handle_subscribe_tab(builder.clone(), sender);
+    // main_window.handle_publish_tab(sender);
+    let mut client = Client::new("User".to_owned(), "127.0.0.1:8080").unwrap();
+    let handler_to_client = thread::spawn(move || {
+        client.client_run(recv, client_sender);
+    });
+    let (intern_sender, intern_recv) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+
+    thread::spawn(move || {
+        let response = window_recv.recv().unwrap();
+        println!("RESPONSE: {:?}", &response);
+        intern_sender.send(response);
+    });
+    let username_label: gtk::Label = builder.object("usr_label").unwrap();
+
+    intern_recv.attach(None, move |text: String| {
+        username_label.set_text(text.as_str());
+        glib::Continue(true)
+    });
 }
 
 fn handle_connect_tab(builder: gtk::Builder, sender: Sender<Packet>) {
-        let connect_button: gtk::Button = builder.object("connect_button").unwrap();
-        let ip_entry: gtk::Entry = builder.object("ip_entry").unwrap();
-        let port_entry: gtk::Entry = builder.object("port_entry").unwrap();
-        let client_id_entry: gtk::Entry = builder.object("clientId_entry").unwrap();
-        let username_entry: gtk::Entry = builder.object("username_entry").unwrap();
-        let password_entry: gtk::Entry = builder.object("pass_entry").unwrap();
-        let last_will_msg_entry: gtk::Entry = builder.object("lastWillMsg_entry").unwrap();
-        let last_will_topic_entry: gtk::Entry = builder.object("lastWillTopic_entry").unwrap();
-        let address = (&ip_entry.text()).to_string() + ":" + &*(&port_entry.text()).to_string();
-        connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
+    let connect_button: gtk::Button = builder.object("connect_button").unwrap();
+    let ip_entry: gtk::Entry = builder.object("ip_entry").unwrap();
+    let port_entry: gtk::Entry = builder.object("port_entry").unwrap();
+    let client_id_entry: gtk::Entry = builder.object("clientId_entry").unwrap();
+    let username_entry: gtk::Entry = builder.object("username_entry").unwrap();
+    let password_entry: gtk::Entry = builder.object("pass_entry").unwrap();
+    let last_will_msg_entry: gtk::Entry = builder.object("lastWillMsg_entry").unwrap();
+    let last_will_topic_entry: gtk::Entry = builder.object("lastWillTopic_entry").unwrap();
+    let address = (&ip_entry.text()).to_string() + ":" + &*(&port_entry.text()).to_string();
+    connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
             sender.send(Packet::Connect(Connect::new(
             ConnectPayload::new((&client_id_entry.text()).to_string(),
                                 Some((&last_will_topic_entry.text()).to_string()),
@@ -92,7 +109,6 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<Packet>) {
         ip_entry.set_text("");
         port_entry.set_text("");
         }));
-
 }
 
 fn handle_publish_tab(builder: gtk::Builder, sender: Sender<Packet>) {
@@ -102,8 +118,6 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<Packet>) {
     let qos_1_rb: gtk::RadioButton = builder.object("qos_1_radiobutton").unwrap();
     let retain_checkbox: gtk::CheckButton = builder.object("retain_checkbox").unwrap();
     let publish_button: gtk::Button = builder.object("publish_button").unwrap();
-    println!("Value of retain: {:?}", retain_checkbox.value_type());
-    println!("Value of qos: {:?}", qos_1_rb.value_type());
     publish_button.connect_clicked(clone!( @weak topic_pub_entry => move |_| {
         sender.send(Packet::Publish(Publish::new(
             PublishFlags::new(0b0100_1011),
@@ -186,79 +200,3 @@ impl MainWindow {
     }));
     }
 }
-
-
-/*
-        let handle_send_packets = thread::spawn(move || {
-            loop {
-                //self.build(sender.clone());
-                let connect_button: gtk::Button = self.builder.object("connect_button").unwrap();
-                let ip_label: gtk::Label = self.builder.object("ip_label").unwrap();
-                connect_button.connect_clicked(clone!(@weak ip_label => move |_| {
-           // ip_label.set_text("PING!");
-            sender.send(Packet::Connect(connect_packet)).unwrap();
-                }));
-            }
-        });
-
-        let handle_recv_packets = thread::spawn(move || {
-            loop {
-                MainWindow::process_received_packets();
-            }
-        });
-
-        handle_recv_packets.join().unwrap();
-        handle_send_packets.join().unwrap();
- */
-
-
-/*    let mut client = Client::new("Pepito".to_owned(), "127.0.0.1:8080".to_owned())?;
-
-    let connect_packet = Connect::new(
-        ConnectPayload::new(
-            "u".to_owned(),
-            Some("u".to_owned()),
-            Some("u".to_owned()),
-            Some("u".to_owned()),
-            Some("u".to_owned()),
-        ),
-        60,
-        true,
-        true,
-        true,
-    );
-
-    client.client_run(connect_packet)?;
-
-    Ok(())*/
-
-
-/*fn client_run(address: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let mut socket = TcpStream::connect(address)?;
-
-    let connect_packet = Connect::new(
-        ConnectPayload::new(
-            "u".to_owned(),
-            Some("u".to_owned()),
-            Some("u".to_owned()),
-            Some("u".to_owned()),
-            Some("u".to_owned()),
-        ),
-        ConnectFlags::new(false, false, false, false, false, false),
-        60,
-    );
-
-    connect_packet.write_to(&mut socket)?;
-    println!("Se envió el connect packet");
-
-    let received_packet = parser::read_packet(&mut socket)?;
-    if let Packet::Connack(connack_packet) = received_packet {
-        println!(
-            "Se recibió el connack packet. Session present: {}. Connect return code: {}",
-            connack_packet.session_present, connack_packet.connect_return_code
-        );
-    }
-
-    Ok(())
-}
-*/
