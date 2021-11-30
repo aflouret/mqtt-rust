@@ -1,11 +1,11 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
 use std::io::{Cursor, Read, Write};
 use crate::parser::{decode_remaining_length, encode_remaining_length};
-use std::io::{Error, ErrorKind::Other};
 
 pub const UNSUBACK_PACKET_TYPE: u8 = 0xb0;
 const UNSUBACK_REMAINING_LENGTH: u32 = 2;
 
+#[derive(Debug)]
 pub struct Unsuback {
     packet_id: u16,
 }
@@ -42,9 +42,7 @@ impl ReadPacket for Unsuback {
     fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
         verify_unsuback_byte(&initial_byte)?;
         let remaining_length = decode_remaining_length(stream)?;
-        if remaining_length != 2 {
-            return Err(Box::new(Error::new(Other, "Incorrect Remaining Length")));
-        }
+        verify_remaining_length_byte(&remaining_length)?;
 
         let mut remaining = vec![0u8; remaining_length as usize];
         stream.read_exact(&mut remaining)?;
@@ -56,6 +54,13 @@ impl ReadPacket for Unsuback {
 
         Ok(Packet::Unsuback(Unsuback::new(packet_identifier)))
     }
+}
+
+fn verify_remaining_length_byte(byte: &u32) -> Result<(), String> {
+    if *byte != UNSUBACK_REMAINING_LENGTH {
+        return Err("Incorrect Remaining Length".into());
+    }
+    Ok(())
 }
 
 fn verify_unsuback_byte(byte: &u8) -> Result<(), String>{
@@ -73,5 +78,26 @@ mod tests {
     fn correct_first_byte() {
         let to_test = verify_unsuback_byte(&UNSUBACK_PACKET_TYPE);
         assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn error_wrong_first_byte(){
+        let byte: u8 = 0xa0;
+        let to_test = verify_unsuback_byte(&byte);
+        assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");
+    }
+
+    #[test]
+    fn correct_remaining_length_byte() {
+        let byte: u32 = UNSUBACK_REMAINING_LENGTH;
+        let to_test = verify_remaining_length_byte(&byte);
+        assert_eq!(to_test, Ok(()));
+    }
+
+    #[test]
+    fn error_remaining_length_byte() {
+        let byte: u32 = 0x5;
+        let to_test = verify_remaining_length_byte(&byte);
+        assert_eq!(to_test, Err("Incorrect Remaining Length".to_string()));
     }
 }

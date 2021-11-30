@@ -148,16 +148,16 @@ mod tests {
         subscribe_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Subscribe::read_from(&mut buff, 0x81);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");
     }
 
     #[test]
-    fn error_empty_topic_list() {
+    fn error_empty_topic_list(){
         let subscribe_packet = Subscribe::new(73);
         let mut buff = Cursor::new(Vec::new());
         subscribe_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Subscribe::read_from(&mut buff, 0x82);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Subscribe can't have an empty topic list");
     }
 }

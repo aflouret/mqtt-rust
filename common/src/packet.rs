@@ -22,7 +22,7 @@ pub enum Qos {
     ExactlyOnce = 2,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Subscription {
     pub topic_filter: String,
     pub max_qos: Qos,
@@ -58,6 +58,7 @@ pub trait WritePacket {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>>;
 }
 
+#[derive(Debug)]
 pub enum Packet {
     Connect(Connect),
     Connack(Connack),

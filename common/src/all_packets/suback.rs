@@ -29,6 +29,7 @@ impl SubackReturnCode {
     }
 }
 
+#[derive(Debug)]
 pub struct Suback {
     packet_id: u16,
     pub return_codes: Vec<SubackReturnCode>,
@@ -117,7 +118,6 @@ fn verify_suback_byte(byte: &u8) -> Result<(), String>{
         SUBACK_PACKET_TYPE => return Ok(()),
         _ => return Err("Wrong First Byte".to_string()),
     }
-
 }
 
 #[cfg(test)]
@@ -158,7 +158,7 @@ mod tests {
         suback_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Suback::read_from(&mut buff, 0x91);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");
     }
 
     #[test]
@@ -168,6 +168,14 @@ mod tests {
         suback_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Suback::read_from(&mut buff, 0x90);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Suback can't have an empty return code list");
+    }
+
+    #[test]
+    fn error_invalid_return_code(){
+        let vector: Vec<u8> = vec![3];
+        let mut buff = Cursor::new(vector);
+        let to_test = SubackReturnCode::read_from(&mut buff);
+        assert_eq!(to_test.unwrap_err().to_string(), "Invalid Return Code");
     }
 }

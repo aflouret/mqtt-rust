@@ -6,6 +6,7 @@ pub const UNSUBSCRIBE_PACKET_TYPE: u8 = 0xa0;
 const UNSUBSCRIBE_FIRST_BYTE: u8 = 0xa2;
 const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
+#[derive(Debug)]
 pub struct Unsubscribe{
     pub topics: Vec<String>,
     pub packet_id: u16,
@@ -140,6 +141,16 @@ mod tests {
         unsubscribe_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Unsubscribe::read_from(&mut buff, 0xe1);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");
+    }
+
+    #[test]
+    fn error_empty_topic_list(){
+        let unsubscribe_packet = Unsubscribe::new(73);
+        let mut buff = Cursor::new(Vec::new());
+        unsubscribe_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Unsubscribe::read_from(&mut buff, 0xa2);
+        assert_eq!(to_test.unwrap_err().to_string(), "Unsubscribe can't have an empty topic list");
     }
 }
