@@ -37,7 +37,7 @@ impl Client {
 /*    pub fn client_run(&mut self, connect_packet: Connect,
     ) -> Result<(), Box<dyn std::error::Error>> {*/
 
-    pub fn client_run(&mut self, recv_from_window: Receiver<Packet>, sender_to_window: Sender<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn client_run(&mut self, recv_from_window: Receiver<Packet>) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(socket) = &mut self.server_stream {
             let mut server_stream_write = socket.try_clone()?;
             let mut server_stream_read = socket.try_clone()?;
@@ -77,7 +77,7 @@ impl Client {
                     match receiver_packet {
                         Packet::Connack(connect) => {
                             println!("Client: Connack packet successfull received");
-                            sender_to_window.send("PONG".to_string());
+                            //sender_to_window.send("PONG".to_string());
                         },
                         Packet::Puback(publish) => {
                             println!("Client: Connack packet successfull received");

@@ -26,8 +26,13 @@ fn main() {
     let application = gtk::Application::new(Some("com.taller.pong"), Default::default());
 
     application.connect_activate(|app| {
+        let (sender, recv) = mpsc::channel::<Packet>();
+        let mut client = Client::new("User".to_owned(), "127.0.0.1:8080").unwrap();
+        let handler_to_client = thread::spawn(move || {
+            client.client_run(recv);
+        });
         let builder = build_ui(app);
-        setup(builder);
+        setup(builder,sender);
     });
 
     application.run();
@@ -50,8 +55,8 @@ fn build_ui(app: &gtk::Application) -> gtk::Builder {
     builder
 }
 
-fn setup(builder: gtk::Builder) {
-    let (sender, recv) = mpsc::channel::<Packet>();
+fn setup(builder: gtk::Builder, sender: Sender<Packet>) {
+    //let (sender, recv) = mpsc::channel::<Packet>();
     let (client_sender, window_recv) = mpsc::channel::<String>();
     /*    let mut main_window = MainWindow::new(builder.clone(),sender.clone()).unwrap();
         main_window.build();*/
@@ -59,10 +64,6 @@ fn setup(builder: gtk::Builder) {
     handle_publish_tab(builder.clone(), sender.clone());
     handle_subscribe_tab(builder.clone(), sender);
     // main_window.handle_publish_tab(sender);
-    let mut client = Client::new("User".to_owned(), "127.0.0.1:8080").unwrap();
-    let handler_to_client = thread::spawn(move || {
-        client.client_run(recv, client_sender);
-    });
     let (intern_sender, intern_recv) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
     thread::spawn(move || {
@@ -101,7 +102,7 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<Packet>) {
             true,
             true,
         )));
-                    username_entry.set_text("");
+        username_entry.set_text("");
         password_entry.set_text("");
         client_id_entry.set_text("");
         last_will_msg_entry.set_text("");
