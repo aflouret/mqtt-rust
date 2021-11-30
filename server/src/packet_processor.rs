@@ -72,15 +72,8 @@ impl PacketProcessor {
         
         // Eliminamos el sender al c_h del hash ya que se va a dropear ese c_h
         let mut senders_hash = self.senders_to_c_h_writers.write().unwrap();
-
-        // ahora, cómo hacemos para eliminar el c_h???? pense en mandarle un error al c_h_w 
-        // if let Some(sender) = senders_hash.get_mut(&c_h_id) {
-        //     sender.lock()?.send(Err("Se debe cerrar el channel".into()))?;
-        // }
-            
-        senders_hash.remove(&c_h_id).unwrap();      
-
-        println!("disconnect handled");
+        senders_hash.remove(&c_h_id);
+        // Cuando eliminamos el sender, el receiver del c_h_w devuelve un error     
     }
 
     pub fn process_packet(&mut self, packet: Packet, c_h_id: u32) -> Result<(), Box<dyn std::error::Error>> {
@@ -217,7 +210,7 @@ impl PacketProcessor {
                 let previous_handler_id = previous_session.get_client_handler_id().unwrap();
                 self.handle_disconnect_error(previous_handler_id);
                 println!("El cliente ya estaba conectado");
-                return Err("El cliente ya estaba conectado".into())
+                //return Err("El cliente ya estaba conectado".into())
 
             }
         }
