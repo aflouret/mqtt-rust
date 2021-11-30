@@ -5,22 +5,27 @@ use common::all_packets::unsuback::Unsuback;
 use common::all_packets::unsubscribe::Unsubscribe;
 use common::packet::{Packet, Qos};
 use std::collections::HashMap;
-use common::all_packets::publish::{Publish};
+use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use common::logging::logger::{Logger, LogMessage};
-use common::all_packets::suback::{Suback};
+use common::all_packets::suback::{Suback, SubackReturnCode};
 use common::all_packets::subscribe::Subscribe;
 
+pub struct Message {
+    pub message: String,
+    pub qos: Qos
+}
 
 pub struct PacketProcessor {
     clients: HashMap<String, Session>,
     rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
     senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
     logger: Arc<Logger>,
+    retained_messages: HashMap<String, Message>,
 }
 
 impl PacketProcessor {
@@ -33,6 +38,7 @@ impl PacketProcessor {
             rx,
             senders_to_c_h_writers,
             logger,
+            retained_messages: HashMap::<String, Message>::new(),
         }
     }
 
@@ -145,12 +151,12 @@ impl PacketProcessor {
     
 
 
-        let suback_packet = Suback::new(subscribe_packet.packet_id);
+        let mut suback_packet = Suback::new(subscribe_packet.packet_id);
         for subscription in subscribe_packet.subscriptions {
             for (_, session) in &mut self.clients {
                 if let Some(client_handler_id)  = session.get_client_handler_id() {
                     if client_handler_id == c_h_id {
-                        /*if subscription_is_valid() == false {
+                        /*if subscription_is_valid() true == false {
                             let return_code = SubackReturnCode::Failure;
                             suback_packet.add_return_code(return_code);
                         } else {
@@ -158,9 +164,28 @@ impl PacketProcessor {
                                 Qos::AtMostOnce => SubackReturnCode::SuccessAtMostOnce,
                                 _ => SubackReturnCode::SuccessAtLeastOnce,
                             };
-                            session.add_subscription(subscription);
+                            session.add_subscription(subscription.clone());
                             suback_packet.add_return_code(return_code)
-                        }*/
+                        }
+                        */
+
+                        //Retain Logic Subscribe
+                        if self.retained_messages.contains_key(&subscription.topic_filter) {
+                            if let Some(message) = self.retained_messages.get(&subscription.topic_filter) {
+                                //Send publish al cliente con el mensaje en el retained_messages
+                                let publish_packet = Publish::new(
+                                    PublishFlags::new(0b0011_0011),
+                                    subscription.topic_filter,
+                                    None, 
+                                    message.message.clone(),
+                                );
+                                
+                                let senders_hash = self.senders_to_c_h_writers.read().unwrap();
+                                let sender = senders_hash.get(&client_handler_id).unwrap();
+                                let sender_mutex_guard = sender.lock().unwrap();
+                                sender_mutex_guard.send(Ok(Packet::Publish(publish_packet))).unwrap();
+                            }
+                        };
 
                         break;
                     }
@@ -183,6 +208,14 @@ impl PacketProcessor {
         let current_session = self.clients.get_mut("u").unwrap(); //TODO: sacar unwrap
         let topic_name = &publish_packet.topic_name;
 
+        //Retain Logic Publish
+        if publish_packet.flags.retain {
+            self.retained_messages.insert(topic_name.clone(), Message { 
+                message: publish_packet.application_message.clone(), 
+                qos: publish_packet.flags.qos_level 
+            });
+        }
+
         let publish_send = publish_packet.clone();
 
         for (c_h_id, session) in &self.clients {
@@ -201,9 +234,7 @@ impl PacketProcessor {
             Ok(None)
         } else {
             Ok(Some(Puback::new(publish_packet.packet_id.unwrap())))
-        }
-        
-        
+        } 
     }
     
     pub fn handle_connect_packet(&mut self, connect_packet: Connect, client_handler_id: u32) -> Result<Connack, Box<dyn std::error::Error>> {
