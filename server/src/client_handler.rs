@@ -39,7 +39,7 @@ impl ClientHandler {
     pub fn run(mut self) -> Result<JoinHandle<()>, Box<dyn std::error::Error>> {
         let stream_write = self.stream_write.take().unwrap();
         let stream_read = self.stream_read.take().unwrap();
-
+        //stream shutdown
 
         let receiver = self.receiver.take().unwrap();
         let sender = self.sender.take().unwrap();
@@ -52,6 +52,7 @@ impl ClientHandler {
             let reader_join_handle = thread::spawn(move || {
                 loop {
                     if let Err(_) = client_handler_reader.receive_packet() {
+                        //stream.shutdown() a alguno clonado y se cierran los demas.
                         break;
                     }
                 }
@@ -137,3 +138,23 @@ impl ClientHandlerReader {
 
             Ok(())*/
 }
+
+
+/*
+use std::io::Read;
+
+fn main() {
+    println!("Hello, world!");
+    let mut s = std::net::TcpStream::connect("localhost:8088").unwrap();
+    let s_clone = s.try_clone().unwrap();
+    let handler = std::thread::spawn(move || {
+        let mut buf = [0u8;1];
+        s.read_exact(&mut buf).unwrap();
+        println!("Leí");
+    });
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    s_clone.shutdown(std::net::Shutdown::Both).unwrap();
+    let res = handler.join();
+    println!("{:?}",
+rror { kind: UnexpectedEof, message: "failed to fill whole buffer" }
+ */

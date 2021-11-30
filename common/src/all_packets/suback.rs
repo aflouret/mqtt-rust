@@ -1,7 +1,6 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read, Write, Error, ErrorKind::UnexpectedEof, ErrorKind::Other};
 use crate::parser::{decode_remaining_length, encode_remaining_length};
-use std::io::{Error, ErrorKind::UnexpectedEof, ErrorKind::Other};
 
 pub const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 pub const SUBACK_PACKET_TYPE: u8 = 0x90;
@@ -32,7 +31,7 @@ impl SubackReturnCode {
 
 pub struct Suback {
     packet_id: u16,
-    return_codes: Vec<SubackReturnCode>,
+    pub return_codes: Vec<SubackReturnCode>,
 }
 
 impl Suback {
@@ -98,11 +97,17 @@ impl ReadPacket for Suback {
         loop {
             match SubackReturnCode::read_from(&mut remaining_bytes){
                 Err(e) => match e.kind(){
-                    UnexpectedEof => return Ok(Packet::Suback(suback_packet)),
+                    UnexpectedEof => break,
                     _ => return Err(Box::new(e)),
                 },
                 Ok(code) => suback_packet.add_return_code(code),
             }
+        }
+
+        if suback_packet.return_codes.len() == 0 {
+            return Err(Box::new(Error::new(Other, "Suback can't have an empty return code list")));
+        } else {
+            return Ok(Packet::Suback(suback_packet));
         }
     }
 }
@@ -153,6 +158,16 @@ mod tests {
         suback_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Suback::read_from(&mut buff, 0x91);
+        assert!(to_test.is_err());
+    }
+
+    #[test]
+    fn empty_suback_returns_error(){
+        let suback_packet = Suback::new(73);
+        let mut buff = Cursor::new(Vec::new());
+        suback_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Suback::read_from(&mut buff, 0x90);
         assert!(to_test.is_err());
     }
 }

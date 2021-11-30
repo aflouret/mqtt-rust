@@ -1,13 +1,10 @@
-use crate::packet::{Packet, ReadPacket, WritePacket, Qos, Subscription};
-use std::io::{Cursor, Read, Write};
-use crate::parser::{encode_mqtt_string, decode_remaining_length, decode_mqtt_string, encode_remaining_length};
-use std::io::ErrorKind::UnexpectedEof;
+use crate::packet::{Packet, ReadPacket, WritePacket, Subscription};
+use std::io::{Cursor, Read, Write, Error, ErrorKind::UnexpectedEof, ErrorKind::Other};
+use crate::parser::{encode_mqtt_string, decode_remaining_length, encode_remaining_length};
 
 pub const SUBSCRIBE_PACKET_TYPE: u8 = 0x80;
 const SUBSCRIBE_FIRST_BYTE: u8 = 0x82;
 const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
-
-
 
 #[derive(Debug)]
 pub struct Subscribe {
@@ -16,9 +13,9 @@ pub struct Subscribe {
 }
 
 impl Subscribe {
-    pub fn new(packet_id: u16, initial_subscription: Subscription) -> Subscribe {
+    pub fn new(packet_id: u16) -> Subscribe {
         Subscribe {
-            subscriptions: vec![initial_subscription],
+            subscriptions: vec![],
             packet_id,
         }
     }
@@ -85,16 +82,21 @@ impl ReadPacket for Subscribe {
         remaining_bytes.read_exact(&mut packet_identifier_bytes)?;
         let packet_identifier = u16::from_be_bytes(packet_identifier_bytes);
     
-        let initial_subscription = Subscription::read_from(&mut remaining_bytes)?;
-        let mut packet_subscribe = Subscribe::new(packet_identifier, initial_subscription);
+        let mut packet_subscribe = Subscribe::new(packet_identifier);
         loop {
             match Subscription::read_from(&mut remaining_bytes){
                 Err(e) => match e.kind(){
-                    UnexpectedEof => return Ok(Packet::Subscribe(packet_subscribe)),
+                    UnexpectedEof => break,
                     _ => return Err(Box::new(e)),
                 },
                 Ok(subscription) => packet_subscribe.add_subscription(subscription),
             }
+        }
+
+        if packet_subscribe.subscriptions.len() == 0 {
+            return Err(Box::new(Error::new(Other, "Subscribe can't have an empty topic list")));
+        } else {
+            return Ok(Packet::Subscribe(packet_subscribe));
         }
     }
 }
@@ -109,14 +111,13 @@ fn verify_subscribe_byte(byte: &u8) -> Result<(), String>{
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::packet::Qos;
 
     #[test]
     fn correct_remaining_length() {
-        let mut subscribe = Subscribe::new(
-            10,
-            Subscription{topic_filter: String::from("test"), max_qos: Qos::AtMostOnce}
-        );
+        let mut subscribe = Subscribe::new(10,);
 
+        subscribe.add_subscription(Subscription{topic_filter: String::from("test"), max_qos: Qos::AtMostOnce});
         subscribe.add_subscription(Subscription{topic_filter: String::from("otro topic"), max_qos: Qos::AtLeastOnce});
         let to_test = subscribe.get_remaining_length().unwrap();
         assert_eq!(to_test, 22);
@@ -124,10 +125,8 @@ mod tests {
 
     #[test]
     fn correct_subscribe_packet() {
-        let mut subscribe_packet = Subscribe::new(
-            73, 
-            Subscription{topic_filter: String::from("otro test"), max_qos: Qos::AtLeastOnce}
-        );
+        let mut subscribe_packet = Subscribe::new(73);
+        subscribe_packet.add_subscription(Subscription{topic_filter: String::from("otro test"), max_qos: Qos::AtLeastOnce});
         let mut buff = Cursor::new(Vec::new());
         subscribe_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
@@ -143,14 +142,22 @@ mod tests {
 
     #[test]
     fn error_wrong_first_byte() {
-        let subscribe_packet = Subscribe::new(
-            73,
-            Subscription{topic_filter: String::from("otro test"), max_qos: Qos::AtLeastOnce}
-        );
+        let mut subscribe_packet = Subscribe::new(73);
+        subscribe_packet.add_subscription(Subscription{topic_filter: String::from("otro test"), max_qos: Qos::AtLeastOnce});
         let mut buff = Cursor::new(Vec::new());
         subscribe_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Subscribe::read_from(&mut buff, 0x81);
+        assert!(to_test.is_err());
+    }
+
+    #[test]
+    fn error_empty_topic_list() {
+        let subscribe_packet = Subscribe::new(73);
+        let mut buff = Cursor::new(Vec::new());
+        subscribe_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Subscribe::read_from(&mut buff, 0x82);
         assert!(to_test.is_err());
     }
 }
