@@ -9,7 +9,8 @@ use crate::all_packets::unsubscribe::{Unsubscribe, UNSUBSCRIBE_PACKET_TYPE};
 use crate::all_packets::unsuback::{Unsuback, UNSUBACK_PACKET_TYPE};
 use crate::all_packets::pingreq::{Pingreq, PINGREQ_PACKET_TYPE};
 use crate::all_packets::pingresp::{Pingresp, PINGRESP_PACKET_TYPE};
-use std::io::{Read, Write};
+use crate::parser::decode_mqtt_string;
+use std::io::{Read, Write, Error, ErrorKind::Other};
 
 const PACKET_TYPE_BYTE: u8 = 0xF0;
 
@@ -18,6 +19,35 @@ const PACKET_TYPE_BYTE: u8 = 0xF0;
 pub enum Qos {
     AtMostOnce = 0,
     AtLeastOnce = 1,
+    ExactlyOnce = 2,
+}
+
+#[derive(Debug, Clone)]
+pub struct Subscription {
+    pub topic_filter: String,
+    pub max_qos: Qos,
+}
+
+impl Subscription {
+    pub fn read_from(stream: &mut dyn Read) -> Result<Subscription, Box<std::io::Error>> {
+        let topic_filter = decode_mqtt_string(stream)?;
+        
+        let mut qos_level_bytes = [0u8; 1];
+        stream.read_exact(&mut qos_level_bytes)?;
+
+        if qos_level_bytes[0] & 0xFA != 0 {
+            return Err(Box::new(Error::new(Other, "The upper 6 bits of the Requested QoS byte should be 0")));
+        }
+
+        let qos_level = u8::from_be_bytes(qos_level_bytes);
+
+        let max_qos = match qos_level {
+            0 => Qos::AtMostOnce,
+            _ => Qos::AtLeastOnce,
+        };
+
+        Ok(Subscription{topic_filter, max_qos})
+    }
 }
 
 pub trait ReadPacket {
@@ -28,6 +58,7 @@ pub trait WritePacket {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>>;
 }
 
+#[derive(Debug)]
 pub enum Packet {
     Connect(Connect),
     Connack(Connack),
@@ -47,7 +78,6 @@ impl Packet {
         let mut indetifier_byte = [0u8; 1];
         let read_bytes = stream.read(&mut indetifier_byte)?;
         if read_bytes == 0 {
-            println!("ENTRO a socket disconeect");
             return Err("Socket desconectado".into());
         }
         match indetifier_byte[0] & PACKET_TYPE_BYTE {

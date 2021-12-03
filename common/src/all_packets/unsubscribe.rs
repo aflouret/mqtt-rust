@@ -1,21 +1,21 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read, Write, Error, ErrorKind::UnexpectedEof, ErrorKind::Other};
 use crate::parser::{encode_mqtt_string, decode_remaining_length, decode_mqtt_string, encode_remaining_length};
-use std::io::ErrorKind::UnexpectedEof;
 
 pub const UNSUBSCRIBE_PACKET_TYPE: u8 = 0xa0;
 const UNSUBSCRIBE_FIRST_BYTE: u8 = 0xa2;
 const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
+#[derive(Debug)]
 pub struct Unsubscribe{
-    topics: Vec<String>,
-    packet_id: u16,
+    pub topics: Vec<String>,
+    pub packet_id: u16,
 }
 
 impl Unsubscribe {
-    pub fn new(packet_id: u16, initial_topic: String) -> Unsubscribe {
+    pub fn new(packet_id: u16) -> Unsubscribe {
         Unsubscribe {
-            topics: vec![initial_topic],
+            topics: vec![],
             packet_id,
         }
     }
@@ -78,16 +78,21 @@ impl ReadPacket for Unsubscribe {
         remaining_bytes.read_exact(&mut packet_identifier_bytes)?;
         let packet_identifier = u16::from_be_bytes(packet_identifier_bytes);
   
-        let initial_topic = decode_mqtt_string(&mut remaining_bytes)?;
-        let mut packet_unsubscribe = Unsubscribe::new(packet_identifier, initial_topic);
+        let mut packet_unsubscribe = Unsubscribe::new(packet_identifier);
         loop {
             match decode_mqtt_string(&mut remaining_bytes){
                 Err(e) => match e.kind(){
-                    UnexpectedEof => return Ok(Packet::Unsubscribe(packet_unsubscribe)),
+                    UnexpectedEof => break,
                     _ => return Err(Box::new(e)),
-                }, //read_exact devuelve std::io::ErrorKind::UnexpectedEof
+                },
                 Ok(topic) => packet_unsubscribe.add_topic(topic),
             }
+        }
+
+        if packet_unsubscribe.topics.len() == 0 {
+            return Err(Box::new(Error::new(Other, "Unsubscribe can't have an empty topic list")));
+        } else {
+            return Ok(Packet::Unsubscribe(packet_unsubscribe));
         }
     }
 }
@@ -105,22 +110,17 @@ mod tests {
 
     #[test]
     fn correct_remaining_length() {
-        let mut subscribe = Unsubscribe::new(
-            10,
-            String::from("test"),
-        );
-
-        subscribe.add_topic(String::from("otro/topic"));
-        let to_test = subscribe.get_remaining_length().unwrap();
+        let mut unsubscribe = Unsubscribe::new(10);
+        unsubscribe.add_topic(String::from("test"));
+        unsubscribe.add_topic(String::from("otro/topic"));
+        let to_test = unsubscribe.get_remaining_length().unwrap();
         assert_eq!(to_test, 20);
     }
 
     #[test]
     fn correct_unsubscribe_packet() {
-        let mut unsubscribe_packet = Unsubscribe::new(
-            73, 
-            String::from("otro test")
-        );
+        let mut unsubscribe_packet = Unsubscribe::new(73);
+        unsubscribe_packet.add_topic(String::from("otro test"));
         let mut buff = Cursor::new(Vec::new());
         unsubscribe_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
@@ -135,14 +135,22 @@ mod tests {
 
     #[test]
     fn error_wrong_first_byte() {
-        let subscribe_packet = Unsubscribe::new(
-            73,
-            String::from("otro test")
-        );
+        let mut unsubscribe_packet = Unsubscribe::new(73);
+        unsubscribe_packet.add_topic(String::from("otro test"));
         let mut buff = Cursor::new(Vec::new());
-        subscribe_packet.write_to(&mut buff).unwrap();
+        unsubscribe_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Unsubscribe::read_from(&mut buff, 0xe1);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");
+    }
+
+    #[test]
+    fn error_empty_topic_list(){
+        let unsubscribe_packet = Unsubscribe::new(73);
+        let mut buff = Cursor::new(Vec::new());
+        unsubscribe_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Unsubscribe::read_from(&mut buff, 0xa2);
+        assert_eq!(to_test.unwrap_err().to_string(), "Unsubscribe can't have an empty topic list");
     }
 }

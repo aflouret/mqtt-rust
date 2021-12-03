@@ -152,12 +152,10 @@ impl ReadPacket for Connect {
     }
 }
 
-
-
 fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
     let mqtt_string_bytes = encode_mqtt_string(PROTOCOL_NAME)?;
     if mqtt_string_bytes != *bytes {
-        return Err("No es MQTT".into());
+        return Err("It's not MQTT".into());
     }
 
     Ok(())
@@ -167,20 +165,20 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
     //TODO: The Server MUST respond to the 401 CONNECT Packet with a CONNACK return code 0x01 
     // (unacceptable protocol level) and then disconnect 402 the Client if the Protocol Level is not supported by the Server
     if byte[0] != CONNECT_PROTOCOL_LEVEL {
-        return Err("Protocol level byte inválido".into());
+        return Err("Invalid protocol level byte".into());
     }
     Ok(())
 }
 
 fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
     if !flags.last_will_flag && (flags.last_will_retain || flags.last_will_qos ) {
-        return Err("Last will flags invalidos".into());
+        return Err("Invalid last will flags".into());
     }
     if !flags.last_will_qos && flags.last_will_flag {
-        return Err("Last will flags invalidos".into());
+        return Err("Invalid last will flags".into());
     }
     if !flags.username && flags.password {
-        return Err("Username y password flags invalidos".into());
+        return Err("Invalid Username and Password flags".into());
     }
 
     Ok(())
@@ -196,7 +194,7 @@ fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), 
         || (payload.last_will_topic.is_some() && !flags.last_will_flag)
         || (payload.last_will_topic.is_none() && flags.last_will_flag)
     {
-        return Err("Payload invalido".into());
+        return Err("Invalid Payload".into());
     }
 
     Ok(())
@@ -384,7 +382,7 @@ mod tests {
         let byte: [u8; 1] = [0x5];
         let to_test = verify_protocol_level_byte(&byte);
 
-        assert_eq!(to_test, Err("Protocol level byte inválido".to_owned()));
+        assert_eq!(to_test, Err("Invalid protocol level byte".to_owned()));
     }
 
     #[test]
@@ -398,7 +396,7 @@ mod tests {
     fn error_mqtt_string_byte() {
         let bytes: [u8; 6] = [0x00, 0x05, 0x4D, 0x51, 0x54, 0x54];
         let to_test = verify_mqtt_string_bytes(&bytes);
-        assert_eq!(to_test, Err("No es MQTT".to_owned()));
+        assert_eq!(to_test, Err("It's not MQTT".to_owned()));
     }
 
     #[test]
@@ -412,14 +410,14 @@ mod tests {
     fn error_username_password_flags() {
         let flags = ConnectFlags::new(false, true, true, true, true, true);
         let to_test = verify_connect_flags(&flags);
-        assert_eq!(to_test, Err("Username y password flags invalidos".into()));
+        assert_eq!(to_test, Err("Invalid Username and Password flags".into()));
     }
 
     #[test]
     fn error_last_will_flags() {
         let flags = ConnectFlags::new(true, true, true, true, false, true);
         let to_test = verify_connect_flags(&flags);
-        assert_eq!(to_test, Err("Last will flags invalidos".into()));
+        assert_eq!(to_test, Err("Invalid last will flags".into()));
     }
 
     #[test]
@@ -449,7 +447,7 @@ mod tests {
         );
 
         let to_test = verify_payload(&flags, &payload);
-        assert_eq!(to_test, Err("Payload invalido".into()));
+        assert_eq!(to_test, Err("Invalid Payload".into()));
     }
     
     #[test]
@@ -503,6 +501,6 @@ mod tests {
         connect_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Connect::read_from(&mut buff, 0x10);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Invalid Username and Password flags");
     }
 }

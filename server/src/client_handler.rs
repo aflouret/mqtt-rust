@@ -1,5 +1,5 @@
 use std::net::TcpStream;
-use common::packet::{Packet, WritePacket};
+use common::packet::{Packet};
 use std::sync::{Mutex, mpsc};
 use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
@@ -34,43 +34,32 @@ impl ClientHandler {
 
     pub fn run(mut self) -> Result<JoinHandle<()>, Box<dyn std::error::Error>> {
         let stream = self.stream.take().unwrap();
-
+        //stream shutdown
 
         let receiver = self.receiver.take().unwrap();
         let sender = self.sender.take().unwrap();
 
-        let mut client_handler_writer = ClientHandlerWriter::new(stream.try_clone()?, receiver);
+        let mut client_handler_writer = ClientHandlerWriter::new(stream.try_clone()? , receiver);
         let mut client_handler_reader = ClientHandlerReader::new(self.id, stream, sender);
 
         let writer_join_handle = thread::spawn(move || {
 
-            // channel para que el reader le avise al writer que el cliente se desconecto
-            let (error_tx, error_rx) = mpsc::channel();
-
             let reader_join_handle = thread::spawn(move || {
                 loop {
-                    let result = client_handler_reader.receive_packet();
-                    if result.is_err() {
-                        //Ver como detectar cuando uun cliente se desconecta
-                        println!("Client Disconnect");
-                        error_tx.send(result).unwrap();
+                    if let Err(_) = client_handler_reader.receive_packet() {
                         break;
                     }
-                    error_tx.send(Ok(())).unwrap();
                 }
             });
 
             loop {
-                if let Ok(result) = error_rx.try_recv() {
-                    if result.is_err() {
-                        println!("Writter recibe client disconnect");
-                        break;
-                    }
+                if let Err(_) = client_handler_writer.send_packet() {
+                    break;
                 }
-                client_handler_writer.send_packet().unwrap();
             }
 
             reader_join_handle.join().unwrap();
+            println!("client handler {} destroyed", self.id);
         });
 
         Ok(writer_join_handle)
@@ -94,11 +83,15 @@ impl ClientHandlerWriter {
     }
 
     pub fn send_packet(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Ok(packet) = self.receiver.recv()? {
-                packet.write_to(&mut self.socket)
+        if let Ok(packet) = self.receiver.recv() {
+            if let Ok(packet) = packet {
+                packet.write_to(&mut self.socket).unwrap();
+            }
+            Ok(())
         } else {
+            self.socket.shutdown(std::net::Shutdown::Write).unwrap();
             Err("No se pudo enviar el packet".into())
-        }        
+        }
     }
 }
 
@@ -123,7 +116,11 @@ impl ClientHandlerReader {
             Ok(packet) => if let Err(error) = self.sender.send((self.id, Ok(packet))) {
                 return Err(Box::new(error));
             },
-            Err(_error) => return Err(Box::new(SendError("Socket Disconnect"))),
+            Err(_) => {
+                self.sender.send((self.id, Err(Box::new(SendError("Socket Disconnect"))) )).unwrap();
+                return Err(Box::new(SendError("Socket Disconnect")))
+            },
+
         }
 
         Ok(())
@@ -135,3 +132,23 @@ impl ClientHandlerReader {
 
             Ok(())*/
 }
+
+
+/*
+use std::io::Read;
+
+fn main() {
+    println!("Hello, world!");
+    let mut s = std::net::TcpStream::connect("localhost:8088").unwrap();
+    let s_clone = s.try_clone().unwrap();
+    let handler = std::thread::spawn(move || {
+        let mut buf = [0u8;1];
+        s.read_exact(&mut buf).unwrap();
+        println!("Leí");
+    });
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    s_clone.shutdown(std::net::Shutdown::Both).unwrap();
+    let res = handler.join();
+    println!("{:?}",
+rror { kind: UnexpectedEof, message: "failed to fill whole buffer" }
+ */
