@@ -110,6 +110,7 @@ impl Client {
             let subscribe_packet = subscribe.subscribe_packet;
             println!("Envio subscribe packet: {:?}", &subscribe_packet);
             subscribe_packet.write_to(&mut s);
+            println!("SOCKET en SUBS: {:?}", &s);
         }
 
         Ok(())
@@ -122,6 +123,7 @@ impl Client {
             let publish_packet = publish.publish_packet;
             println!("Envio publish packet: {:?}", &publish_packet);
             publish_packet.write_to(&mut s);
+            println!("SOCKET en PUBLI: {:?}", &s);
         }
         Ok(())
     }

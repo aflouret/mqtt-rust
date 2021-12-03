@@ -78,6 +78,7 @@ impl Packet {
         let mut indetifier_byte = [0u8; 1];
         let read_bytes = stream.read(&mut indetifier_byte)?;
         if read_bytes == 0 {
+            println!("ENTRO");
             return Err("Socket desconectado".into());
         }
         match indetifier_byte[0] & PACKET_TYPE_BYTE {

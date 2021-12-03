@@ -11,8 +11,8 @@ use gtk::{Application, Builder};
 use gtk::prelude::*;
 use common::all_packets::connect::{Connect, ConnectPayload};
 use common::all_packets::publish::{Publish, PublishFlags};
-use common::all_packets::subscribe::{Subscribe, Topic};
-use common::packet::{Packet, Qos};
+use common::all_packets::subscribe::{Subscribe};
+use common::packet::{Packet, Qos, Subscription};
 use crate::handlers::EventHandlers;
 use crate::handlers::HandleConection;
 use crate::handlers::HandlePublish;
@@ -131,12 +131,12 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
 }
 
 fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
-    let suscribe_button: gtk::Button = builder.object("suscribe_button").unwrap();
+    let subscribe_button: gtk::Button = builder.object("suscribe_button").unwrap();
     let topic_subscribe_entry: gtk::Entry = builder.object("topic_suscribe_entry").unwrap();
-    suscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
-        let subscribe_packet = Subscribe::new(10,
-                    Topic{name: (&topic_subscribe_entry.text()).to_string(), qos: Qos::AtMostOnce}
-        );
+    subscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
+        let mut subscribe_packet = Subscribe::new(10);
+        subscribe_packet.add_subscription(Subscription{topic_filter: (&topic_subscribe_entry.text()).to_string(), max_qos: Qos::AtMostOnce});
+
         let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(subscribe_packet));
         sender.send(event_subscribe);
     }));
