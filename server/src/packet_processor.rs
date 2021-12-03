@@ -13,6 +13,8 @@ use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use common::logging::logger::{Logger, LogMessage};
 use common::all_packets::suback::{Suback, SubackReturnCode};
+use common::all_packets::pingreq::Pingreq;
+use common::all_packets::pingresp::Pingresp;
 use common::all_packets::subscribe::Subscribe;
 
 pub struct Message {
@@ -107,6 +109,12 @@ impl PacketProcessor {
                     Some(Ok(Packet::Suback(suback_packet)))
                 },
 
+                Packet::Pingreq(pingreq_packet) => {
+                    self.logger.log_msg(LogMessage::new("Pingreq Packet received from:".to_string(),c_h_id.to_string()));
+                    let pingresp_packet = self.handle_pingreq_packet(pingreq_packet, c_h_id)?;
+                    Some(Ok(Packet::Pingresp(pingresp_packet)))
+                },
+
                 _ => { return Err("Invalid packet".into()) },
             };
         
@@ -118,6 +126,12 @@ impl PacketProcessor {
         }
         
         Ok(())
+    }
+
+    pub fn handle_pingreq_packet(&mut self, _pingreq_packet: Pingreq, _c_h_id: u32) -> Result<Pingresp, Box<dyn std::error::Error>>{
+        println!("Se recibió el pingreq packet");
+
+        Ok(Pingresp::new())
     }
 
     pub fn handle_unsubscribe_packet(&mut self, unsubscribe_packet: Unsubscribe, c_h_id: u32) -> Result<Unsuback, Box<dyn std::error::Error>> {

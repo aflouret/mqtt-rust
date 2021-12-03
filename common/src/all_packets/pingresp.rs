@@ -8,6 +8,12 @@ pub const PINGRESP_PACKET_TYPE: u8 = 0xd0;
 #[derive(Debug)]
 pub struct Pingresp;
 
+impl Pingresp {
+    pub fn new() -> Pingresp {
+        Pingresp {}
+    }
+}
+
 impl WritePacket for Pingresp {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         // FIXED HEADER
