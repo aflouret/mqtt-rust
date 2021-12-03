@@ -9,8 +9,8 @@ const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
 #[derive(Debug)]
 pub struct Topic {
-    name: String,
-    qos: Qos,
+    pub name: String,
+    pub qos: Qos,
 }
 
 impl Topic {
