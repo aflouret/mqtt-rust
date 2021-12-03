@@ -1,19 +1,15 @@
 use crate::packet::{Packet, ReadPacket, WritePacket, Qos};
-use std::io::Cursor;
-use std::io::{Read, Write};
-use crate::parser::decode_remaining_length;
-use crate::parser::decode_mqtt_string;
-use crate::parser::encode_remaining_length;
-use crate::parser::encode_mqtt_string;
+use std::io::{Cursor, Read, Write};
+use crate::parser::{decode_remaining_length, decode_mqtt_string, encode_remaining_length, encode_mqtt_string};
 
 pub const PUBLISH_PACKET_TYPE: u8 = 0x30;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Publish {
-    flags: PublishFlags,
-    topic_name: String,
-    packet_id: Option<u16>,
-    application_message: String,
+    pub flags: PublishFlags,
+    pub topic_name: String,
+    pub packet_id: Option<u16>,
+    pub application_message: String,
 }
 
 impl Publish {
@@ -83,6 +79,8 @@ impl WritePacket for Publish {
 
 impl ReadPacket for Publish {
     fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+        verify_publish_byte(&initial_byte)?;
+        verify_qos(&initial_byte)?;
         let publish_flags = PublishFlags::new(initial_byte);
         verify_publish_flags(&publish_flags)?;
 
@@ -92,6 +90,7 @@ impl ReadPacket for Publish {
         let mut remaining_bytes = Cursor::new(remaining);
 
         let topic_name = decode_mqtt_string(&mut remaining_bytes)?;
+        verify_topic_name_withoud_wildcards(&topic_name)?;
 
         let packet_id = match publish_flags.qos_level {
             Qos::AtLeastOnce => {
@@ -116,6 +115,31 @@ impl ReadPacket for Publish {
     }
 }
 
+fn verify_topic_name_withoud_wildcards(topic_name: &String)-> Result<(), String> {
+    //The Topic Name in the PUBLISH Packet MUST NOT contain wildcard characters: ‘#’, ‘+’, '$'
+    if topic_name.contains('#') || topic_name.contains('$') || topic_name.contains('+'){
+        return Err("The Topic name contains a wildcard".to_string());
+    }
+
+    Ok(())
+}
+
+fn verify_publish_byte(byte: &u8) -> Result<(), String>{
+    match *byte & 0xF0 {
+        PUBLISH_PACKET_TYPE => return Ok(()),
+        _ => return Err("Wrong First Byte".to_string()),
+    }
+}
+
+fn verify_qos(byte: &u8) -> Result<(), String> {
+    //A PUBLISH Packet MUST NOT have both QoS bits set to 1.
+    if *byte & 0x06 == 0x06 {
+        return Err("Both QoS bits set to 1".into());
+    }
+
+    Ok(())
+}
+
 fn verify_publish_flags(flags: &PublishFlags) -> Result<(), String> {
     if flags.qos_level == Qos::AtMostOnce && flags.duplicate {
         return Err("The DUP flag MUST be set to 0 for all QoS 0 messages".into());
@@ -125,13 +149,13 @@ fn verify_publish_flags(flags: &PublishFlags) -> Result<(), String> {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct PublishFlags {
-    duplicate: bool,
-    qos_level: Qos,
-    retain: bool,
+    pub duplicate: bool,
+    pub qos_level: Qos,
+    pub retain: bool,
 }
 
-//Falta checkear: If a Server or Client receives a PUBLISH Packet which has both QoS bits set to 1 it MUST close the Network Connection
 impl PublishFlags {
     pub fn new(initial_byte: u8) -> PublishFlags {
         let retain = (initial_byte & 0x01) != 0;
@@ -214,7 +238,7 @@ mod tests {
         let mut buff = Cursor::new(Vec::new());
         publish_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
-        let to_test = Publish::read_from(&mut buff, 0x4b).unwrap();
+        let to_test = Publish::read_from(&mut buff, 0x3b).unwrap();
         if let Packet::Publish(to_test) = to_test {
             assert!(
                     to_test.topic_name == publish_packet.topic_name
@@ -225,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn error_packet() {
+    fn error_first_byte() {
         let publish_packet = Publish::new(
             PublishFlags::new(0b0100_1011),
             "Topic".to_string(),
@@ -236,7 +260,87 @@ mod tests {
         let mut buff = Cursor::new(Vec::new());
         publish_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
-        let to_test = Publish::read_from(&mut buff, 0x10);
-        assert!(to_test.is_err());
+        let to_test = Publish::read_from(&mut buff, 0x1b);
+        assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");
+    }
+
+    #[test]
+    fn error_invalid_qos() {
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_1111),
+            "Topic".to_string(),
+            Some(15),
+            "Message".to_string(),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        publish_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Publish::read_from(&mut buff, 0x3F);
+        assert_eq!(to_test.unwrap_err().to_string(), "Both QoS bits set to 1");
+    }
+
+    #[test]
+    fn error_topic_name_with_wildcard1() {
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_1001),
+            "sports/#".to_string(),
+            Some(15),
+            "Message".to_string(),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        publish_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Publish::read_from(&mut buff, 0x39);
+        assert_eq!(to_test.unwrap_err().to_string(), "The Topic name contains a wildcard");
+    }
+
+    #[test]
+    fn error_topic_name_with_wildcard2() {
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_1001),
+            "sport/+/player1".to_string(),
+            Some(15),
+            "Message".to_string(),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        publish_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Publish::read_from(&mut buff, 0x39);
+        assert_eq!(to_test.unwrap_err().to_string(), "The Topic name contains a wildcard");
+    }
+
+    #[test]
+    fn error_topic_name_with_wildcard3() {
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_1001),
+            "$SYS/".to_string(),
+            Some(15),
+            "Message".to_string(),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        publish_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Publish::read_from(&mut buff, 0x39);
+        assert_eq!(to_test.unwrap_err().to_string(), "The Topic name contains a wildcard");
+    }
+
+    #[test]
+    fn error_flags() {
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_1010),
+            "Otro topic".to_string(),
+            Some(15),
+            "Message".to_string(),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        publish_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Publish::read_from(&mut buff, 0x3a);
+        assert_eq!(to_test.unwrap_err().to_string(), "The DUP flag MUST be set to 0 for all QoS 0 messages");
     }
 }

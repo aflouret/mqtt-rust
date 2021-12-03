@@ -5,6 +5,7 @@ use crate::parser::{decode_remaining_length, encode_remaining_length};
 pub const CONNACK_PACKET_TYPE: u8 = 0x20;
 const CONNACK_REMAINING_LENGTH: u32 = 2;
 
+#[derive(Debug)]
 pub struct Connack {
     pub session_present: bool,
     pub connect_return_code: u8,
@@ -46,7 +47,8 @@ impl WritePacket for Connack {
 }
 
 impl ReadPacket for Connack {
-    fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+        verify_connack_byte(&initial_byte)?;
         let remaining_length = decode_remaining_length(stream)?;
         verify_remaining_length_byte(&remaining_length)?;
 
@@ -75,23 +77,32 @@ impl ReadPacket for Connack {
     }
 }
 
+fn verify_connack_byte(byte: &u8) -> Result<(), String>{
+    match *byte {
+        CONNACK_PACKET_TYPE => return Ok(()),
+        _ => return Err("Wrong First Byte".to_string()),
+    }
+}
+
 fn verify_flags_byte(byte: &[u8; 1]) -> Result<(), String> {
+    //Byte 1 is the "Connect Acknowledge Flags". Bits 7-1 are reserved and MUST be set to 0. 
     if byte[0] & !0x1 != 0x0 {
-        return Err("Flags invalidos".into());
+        return Err("Invalid Flags".into());
     }
     Ok(())
 }
 
 fn verify_remaining_length_byte(byte: &u32) -> Result<(), String> {
     if *byte != CONNACK_REMAINING_LENGTH {
-        return Err("Remaining length byte inválido".into());
+        return Err("Incorrect Remaining Length".into());
     }
     Ok(())
 }
 
 fn verify_packet(session_present_flag: bool, connect_return_code: u8) -> Result<(), String> {
-    if connect_return_code != 0 && session_present_flag    {
-        return Err("Session present debe valer 0".into());
+    //If a server sends a CONNACK packet containing a non-zero return code it MUST set Session Present to 0
+    if connect_return_code != 0 && session_present_flag {
+        return Err("Session present must be 0".into());
     }
     Ok(())
 }
@@ -119,7 +130,7 @@ mod tests {
     fn error_flag_byte() {
         let byte: [u8; 1] = [0x2];
         let to_test = verify_flags_byte(&byte);
-        assert_eq!(to_test, Err("Flags invalidos".to_owned()));
+        assert_eq!(to_test, Err("Invalid Flags".to_owned()));
     }
 
     #[test]
@@ -133,7 +144,7 @@ mod tests {
     fn error_remaining_length_byte() {
         let byte: u32 = 0x5;
         let to_test = verify_remaining_length_byte(&byte);
-        assert_eq!(to_test, Err("Remaining length byte inválido".to_owned()));
+        assert_eq!(to_test, Err("Incorrect Remaining Length".to_owned()));
     }
 
     #[test]
@@ -161,6 +172,6 @@ mod tests {
         connack_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Connack::read_from(&mut buff, 0x20);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Session present must be 0");
     }
 }

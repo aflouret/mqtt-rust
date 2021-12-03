@@ -1,7 +1,6 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read, Write, Error, ErrorKind::UnexpectedEof, ErrorKind::Other};
 use crate::parser::{decode_remaining_length, encode_remaining_length};
-use std::io::{Error, ErrorKind::UnexpectedEof, ErrorKind::Other};
 
 pub const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 pub const SUBACK_PACKET_TYPE: u8 = 0x90;
@@ -30,16 +29,17 @@ impl SubackReturnCode {
     }
 }
 
+#[derive(Debug)]
 pub struct Suback {
     packet_id: u16,
-    return_codes: Vec<SubackReturnCode>,
+    pub return_codes: Vec<SubackReturnCode>,
 }
 
 impl Suback {
-    pub fn new(packet_id: u16, initial_code: SubackReturnCode) -> Suback{
+    pub fn new(packet_id: u16) -> Suback{
         Suback {
             packet_id,
-            return_codes: vec![initial_code],
+            return_codes: vec![],
         }
     }
 
@@ -50,7 +50,7 @@ impl Suback {
         Ok(length as u32)
     }
 
-    fn add_return_code(&mut self, code: SubackReturnCode){
+    pub fn add_return_code(&mut self, code: SubackReturnCode){
         self.return_codes.push(code);
     }
 }
@@ -94,16 +94,21 @@ impl ReadPacket for Suback {
         remaining_bytes.read_exact(&mut packet_identifier_bytes)?;
         let packet_identifier = u16::from_be_bytes(packet_identifier_bytes);
     
-        let initial_return_code = SubackReturnCode::read_from(&mut remaining_bytes)?;
-        let mut suback_packet = Suback::new(packet_identifier, initial_return_code);
+        let mut suback_packet = Suback::new(packet_identifier);
         loop {
             match SubackReturnCode::read_from(&mut remaining_bytes){
                 Err(e) => match e.kind(){
-                    UnexpectedEof => return Ok(Packet::Suback(suback_packet)),
+                    UnexpectedEof => break,
                     _ => return Err(Box::new(e)),
                 },
                 Ok(code) => suback_packet.add_return_code(code),
             }
+        }
+
+        if suback_packet.return_codes.len() == 0 {
+            return Err(Box::new(Error::new(Other, "Suback can't have an empty return code list")));
+        } else {
+            return Ok(Packet::Suback(suback_packet));
         }
     }
 }
@@ -113,7 +118,6 @@ fn verify_suback_byte(byte: &u8) -> Result<(), String>{
         SUBACK_PACKET_TYPE => return Ok(()),
         _ => return Err("Wrong First Byte".to_string()),
     }
-
 }
 
 #[cfg(test)]
@@ -122,7 +126,8 @@ mod tests {
 
     #[test]
     fn correct_remaining_length() {
-        let mut suback_packet = Suback::new(50, SubackReturnCode::SuccessAtMostOnce);
+        let mut suback_packet = Suback::new(50);
+        suback_packet.add_return_code(SubackReturnCode::SuccessAtMostOnce);
         suback_packet.add_return_code(SubackReturnCode::SuccessAtLeastOnce);
         suback_packet.add_return_code(SubackReturnCode::Failure);
 
@@ -132,7 +137,8 @@ mod tests {
 
     #[test]
     fn correct_suback_packet() {
-        let mut suback_packet = Suback::new(73, SubackReturnCode::SuccessAtLeastOnce);
+        let mut suback_packet = Suback::new(73);
+        suback_packet.add_return_code(SubackReturnCode::SuccessAtLeastOnce);
         suback_packet.add_return_code(SubackReturnCode::SuccessAtMostOnce);
         let mut buff = Cursor::new(Vec::new());
         suback_packet.write_to(&mut buff).unwrap();
@@ -146,11 +152,30 @@ mod tests {
 
     #[test]
     fn error_wrong_first_byte(){
-        let suback_packet = Suback::new(73, SubackReturnCode::SuccessAtLeastOnce);
+        let mut suback_packet = Suback::new(73);
+        suback_packet.add_return_code(SubackReturnCode::SuccessAtLeastOnce);
         let mut buff = Cursor::new(Vec::new());
         suback_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Suback::read_from(&mut buff, 0x91);
-        assert!(to_test.is_err());
+        assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");
+    }
+
+    #[test]
+    fn empty_suback_returns_error(){
+        let suback_packet = Suback::new(73);
+        let mut buff = Cursor::new(Vec::new());
+        suback_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Suback::read_from(&mut buff, 0x90);
+        assert_eq!(to_test.unwrap_err().to_string(), "Suback can't have an empty return code list");
+    }
+
+    #[test]
+    fn error_invalid_return_code(){
+        let vector: Vec<u8> = vec![3];
+        let mut buff = Cursor::new(vector);
+        let to_test = SubackReturnCode::read_from(&mut buff);
+        assert_eq!(to_test.unwrap_err().to_string(), "Invalid Return Code");
     }
 }

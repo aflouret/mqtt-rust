@@ -42,7 +42,8 @@ impl WritePacket for Puback{
 }
 
 impl ReadPacket for Puback {
-    fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn Error>> {
+    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn Error>> {
+        verify_puback_byte(&initial_byte)?;
         let remaining_length = decode_remaining_length(stream)?;
         verify_remaining_length_byte(&remaining_length)?;
 
@@ -59,14 +60,19 @@ impl ReadPacket for Puback {
         Ok(Packet::Puback(Puback {
             packet_id,
         }))
-
     }
 }
 
-//Consultar de meterla en un utils.rs porque tmb se usa en connack.rs
+fn verify_puback_byte(byte: &u8) -> Result<(), String>{
+    match *byte {
+        PUBACK_PACKET_TYPE => return Ok(()),
+        _ => return Err("Wrong First Byte".to_string()),
+    }
+}
+
 fn verify_remaining_length_byte(byte: &u32) -> Result<(), String> {
     if *byte != PUBACK_REMAINING_LENGTH {
-        return Err("Remaining length byte inválido".into());
+        return Err("Incorrect Remaining Length".into());
     }
     Ok(())
 }
@@ -93,5 +99,20 @@ mod tests {
         if let Packet::Puback(to_test) = to_test {
             assert_eq!(to_test.packet_id, 10);
         }
+    }
+
+    #[test]
+    fn error_remaining_length_byte() {
+        let byte: u32 = 0xF;
+        let to_test = verify_remaining_length_byte(&byte);
+
+        assert_eq!(to_test, Err("Incorrect Remaining Length".to_owned()));
+    }
+
+    #[test]
+    fn error_first_byte() {
+        let byte: u8 = 0xaa;
+        let to_test = verify_puback_byte(&byte);
+        assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");
     }
 }
