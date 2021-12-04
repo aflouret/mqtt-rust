@@ -116,10 +116,11 @@ impl ClientHandlerReader {
     pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         match Packet::read_from(&mut self.socket) {
             Ok(packet) => {
-                // Si es un Connect y ya había recibido un Connect antes, es un PROTOCOL VIOLATION: desconecto al client
+                // [MQTT-3.1.0-2]: Si es un Connect y ya había recibido un Connect antes, es un PROTOCOL VIOLATION: desconecto al client
                 if let Packet::Connect(_connect) = &packet {
                     if self.already_connected {
-                            return Err(Box::new(SendError("PROTOCOL VIOLATION: Connect packet received twice")));
+                        println!("PROTOCOL VIOLATION: Connect packet received twice");
+                        return Err(Box::new(SendError("PROTOCOL VIOLATION: Connect packet received twice")));
                     }
                 }
                 if let Err(error) = self.sender.send((self.id, Ok(packet))) {

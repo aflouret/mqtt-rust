@@ -81,17 +81,17 @@ impl Packet {
             return Err("Socket desconectado".into());
         }
         match indetifier_byte[0] & PACKET_TYPE_BYTE {
-            CONNECT_PACKET_TYPE => Ok(Connect::read_from(stream, indetifier_byte[0])?),
-            CONNACK_PACKET_TYPE => Ok(Connack::read_from(stream, indetifier_byte[0])?),
-            PUBLISH_PACKET_TYPE => Ok(Publish::read_from(stream, indetifier_byte[0])?),
-            PUBACK_PACKET_TYPE =>  Ok(Puback::read_from(stream, indetifier_byte[0])?),
-            SUBSCRIBE_PACKET_TYPE => Ok(Subscribe::read_from(stream, indetifier_byte[0])?),
-            SUBACK_PACKET_TYPE => Ok(Suback::read_from(stream, indetifier_byte[0])?),
-            UNSUBSCRIBE_PACKET_TYPE => Ok(Unsubscribe::read_from(stream, indetifier_byte[0])?),
-            UNSUBACK_PACKET_TYPE => Ok(Unsuback::read_from(stream, indetifier_byte[0])?),
-            PINGREQ_PACKET_TYPE => Ok(Pingreq::read_from(stream, indetifier_byte[0])?),
-            PINGRESP_PACKET_TYPE => Ok(Pingresp::read_from(stream, indetifier_byte[0])?),
-            DISCONNECT_PACKET_TYPE => Ok(Disconnect::read_from(stream, indetifier_byte[0])?),
+            CONNECT_PACKET_TYPE => Connect::read_from(stream, indetifier_byte[0]),
+            CONNACK_PACKET_TYPE => Connack::read_from(stream, indetifier_byte[0]),
+            PUBLISH_PACKET_TYPE => Publish::read_from(stream, indetifier_byte[0]),
+            PUBACK_PACKET_TYPE =>  Puback::read_from(stream, indetifier_byte[0]),
+            SUBSCRIBE_PACKET_TYPE => Subscribe::read_from(stream, indetifier_byte[0]),
+            SUBACK_PACKET_TYPE => Suback::read_from(stream, indetifier_byte[0]),
+            UNSUBSCRIBE_PACKET_TYPE => Unsubscribe::read_from(stream, indetifier_byte[0]),
+            UNSUBACK_PACKET_TYPE => Unsuback::read_from(stream, indetifier_byte[0]),
+            PINGREQ_PACKET_TYPE => Pingreq::read_from(stream, indetifier_byte[0]),
+            PINGRESP_PACKET_TYPE => Pingresp::read_from(stream, indetifier_byte[0]),
+            DISCONNECT_PACKET_TYPE => Disconnect::read_from(stream, indetifier_byte[0]),
             _ => Err("Ningún packet tiene ese código".into()),
         }
     }
