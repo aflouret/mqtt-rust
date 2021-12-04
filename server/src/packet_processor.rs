@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use common::logging::logger::{Logger, LogMessage};
@@ -47,7 +47,6 @@ impl PacketProcessor {
     pub fn run(mut self) -> JoinHandle<()> {
         let join_handle = thread::spawn(move || {
             loop {
-                // TODO: sacar unwraps del thread
                 if let Ok((c_h_id, packet)) = self.rx.recv() {
                     
                     match packet {
@@ -56,7 +55,9 @@ impl PacketProcessor {
                                 self.handle_disconnect_error(c_h_id);
                             }
                         },
-                        Err(_) => self.handle_disconnect_error(c_h_id),
+                        Err(_) => {
+                            self.handle_disconnect_error(c_h_id);
+                        },
                     }
 
                 } else {
@@ -80,9 +81,11 @@ impl PacketProcessor {
         
         // Eliminamos el sender al c_h del hash ya que se va a dropear ese c_h
         let mut senders_hash = self.senders_to_c_h_writers.write().unwrap();
-        senders_hash.remove(&c_h_id);
-        // Cuando eliminamos el sender, el receiver del c_h_w devuelve un error     
-    }
+        if let Some(sender) = senders_hash.remove(&c_h_id){
+            // Le mandamos al c_h_w que se cierre
+            sender.lock().unwrap().send(Err(Box::new(SendError("Socket Disconnect")))).unwrap();
+        }
+     }
 
     pub fn process_packet(&mut self, packet: Packet, c_h_id: u32) -> Result<(), Box<dyn std::error::Error>> {
         let response_packet = match packet {
@@ -90,10 +93,6 @@ impl PacketProcessor {
                     self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(),c_h_id.to_string()))?;
                     println!("Recibi el Connect (en process_pracket)");
                     let connack_packet = self.handle_connect_packet(connect_packet, c_h_id)?;
-                    // Pueden pasar varias cosas:
-                    // Devuelve un connack sin ningún error
-                    // Devuelve un connack que hay que mandarle al client con algún código de error
-                    // Hubo un error más serio y hay que directamente desconectar al client
                     Some(Ok(Packet::Connack(connack_packet)))
                 }
 

@@ -1,5 +1,7 @@
 use std::net::TcpStream;
 use common::packet::{Packet};
+use common::all_packets::connect::{INCORRECT_PROTOCOL_LEVEL_ERROR_MSG};
+use common::all_packets::connack::Connack;
 use std::sync::{Mutex, mpsc};
 use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
@@ -11,6 +13,7 @@ pub struct ClientHandler {
     stream: Option<TcpStream>,
     sender: Option<Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>>,
     receiver: Option<Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>>,
+    reader_to_writer_tx: Sender<Result<Packet, Box<dyn std::error::Error + Send>>>
 }
 
 impl ClientHandler {
@@ -21,6 +24,7 @@ impl ClientHandler {
         sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
     ) -> ClientHandler {
         let (server_tx, c_h_writer_rx) = mpsc::channel::<Result<Packet, Box<dyn std::error::Error + Send>>>();
+        let sender_from_c_h_reader_to_c_h_w = server_tx.clone();
         let mut hash = senders_to_c_h_writers.write().unwrap();
         hash.insert(id, Arc::new(Mutex::new(server_tx)));
 
@@ -29,6 +33,7 @@ impl ClientHandler {
             stream: Some(stream),
             sender: Some(sender),
             receiver: Some(c_h_writer_rx),
+            reader_to_writer_tx: sender_from_c_h_reader_to_c_h_w
         }
     }
 
@@ -40,13 +45,14 @@ impl ClientHandler {
         let sender = self.sender.take().unwrap();
 
         let mut client_handler_writer = ClientHandlerWriter::new(stream.try_clone()? , receiver);
-        let mut client_handler_reader = ClientHandlerReader::new(self.id, stream, sender);
+        let mut client_handler_reader = ClientHandlerReader::new(self.id, stream, sender, self.reader_to_writer_tx.clone());
 
         let writer_join_handle = thread::spawn(move || {
 
             let reader_join_handle = thread::spawn(move || {
                 loop {
                     if let Err(_) = client_handler_reader.receive_packet() {
+                        println!("se elimina el reader");
                         break;
                     }
                 }
@@ -54,6 +60,7 @@ impl ClientHandler {
 
             loop {
                 if let Err(_) = client_handler_writer.send_packet() {
+                    println!("se elimina el writer");
                     break;
                 }
             }
@@ -83,10 +90,10 @@ impl ClientHandlerWriter {
     }
 
     pub fn send_packet(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Ok(packet) = self.receiver.recv() {
-            if let Ok(packet) = packet {
-                packet.write_to(&mut self.socket).unwrap();
-            }
+        if let Ok(packet) = self.receiver.recv()? {
+            //if let Ok(packet) = packet {
+            packet.write_to(&mut self.socket).unwrap();
+            //}
             Ok(())
         } else {
             self.socket.shutdown(std::net::Shutdown::Write).unwrap();
@@ -100,16 +107,22 @@ struct ClientHandlerReader {
     id: u32,
     socket: TcpStream,
     sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,//Por acá manda paquetes al sv
-    already_connected: bool
+    already_connected: bool,
+    reader_to_writer_tx: Sender<Result<Packet, Box<dyn std::error::Error + Send>>>
 }
 
 impl ClientHandlerReader {
-    pub fn new(id: u32, socket: TcpStream, sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>) -> ClientHandlerReader {
+    pub fn new(id: u32, 
+                socket: TcpStream, 
+                sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>, 
+                reader_to_writer_tx: Sender<Result<Packet, Box<dyn std::error::Error + Send>>>) 
+                    -> ClientHandlerReader {
         ClientHandlerReader {
             id,
             socket,
             sender,
-            already_connected: false
+            already_connected: false,
+            reader_to_writer_tx
         }
     }
 
@@ -127,39 +140,23 @@ impl ClientHandlerReader {
                     return Err(Box::new(error));
                 }
             },
-            Err(_) => {
+            Err(error) => {
+                if error.to_string() == INCORRECT_PROTOCOL_LEVEL_ERROR_MSG.to_string() {
+                    println!("{}", error.to_string());
+                    // [MQTT-3.1.2-2]. Enviamos un connack con 0x1 y desconectamos. 
+                    // [MQTT-3.2.2-4]. Por eso session_present = false
+                    let connack = Connack::new(false, 0x1);
+                    self.reader_to_writer_tx.send(Ok(Packet::Connack(connack))).unwrap();
+                
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                }
+                
                 self.sender.send((self.id, Err(Box::new(SendError("Socket Disconnect"))) )).unwrap();
-                return Err(Box::new(SendError("Socket Disconnect")))
+                return Err(Box::new(SendError("Socket Disconnect")));
             },
 
         }
 
         Ok(())
     }
-
-    /*        let packet = parser::read_packet(&mut self.socket);
-            // mandar tupla (id, packet)
-            self.sender.send((self.id, packet))?;
-
-            Ok(())*/
 }
-
-
-/*
-use std::io::Read;
-
-fn main() {
-    println!("Hello, world!");
-    let mut s = std::net::TcpStream::connect("localhost:8088").unwrap();
-    let s_clone = s.try_clone().unwrap();
-    let handler = std::thread::spawn(move || {
-        let mut buf = [0u8;1];
-        s.read_exact(&mut buf).unwrap();
-        println!("Leí");
-    });
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    s_clone.shutdown(std::net::Shutdown::Both).unwrap();
-    let res = handler.join();
-    println!("{:?}",
-rror { kind: UnexpectedEof, message: "failed to fill whole buffer" }
- */

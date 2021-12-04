@@ -20,7 +20,8 @@ const LAST_WILL_FLAG: u8 = 0b0000_0100;
 const CLEAN_SESSION_FLAG: u8 = 0b0000_0010;
 const RESERVED_BIT: u8 = 0b0000_0001;
 
-const INCORRECT_PROTOCOL_NAME_ERROR: &str = "Incorrect Protocol Name";
+pub const INCORRECT_PROTOCOL_NAME_ERROR_MSG: &str = "Disconnect: Incorrect Protocol Name";
+pub const INCORRECT_PROTOCOL_LEVEL_ERROR_MSG: &str = "SendConnackAndDisconnect: Incorrect Protocol Level";
 
 #[derive(Debug)]
 pub struct Connect {
@@ -125,9 +126,7 @@ impl ReadPacket for Connect {
 
         let mut mqtt_string_bytes = [0u8; 6];
         remaining_bytes.read_exact(&mut mqtt_string_bytes)?;
-        if let Err(_error) = verify_protocol_name_bytes(&mqtt_string_bytes) {
-            return Err("Disconnection error".into());
-        }
+        verify_protocol_name_bytes(&mqtt_string_bytes)?; 
 
         let mut protocol_level_byte = [0u8; 1];
         remaining_bytes.read_exact(&mut protocol_level_byte)?;
@@ -160,7 +159,7 @@ fn verify_protocol_name_bytes(bytes: &[u8; 6]) -> Result<(), String> {
     let mqtt_string_bytes = encode_mqtt_string(PROTOCOL_NAME)?;
     if mqtt_string_bytes != *bytes {
         // [MQTT-3.1.2-1]. 
-        return Err(INCORRECT_PROTOCOL_NAME_ERROR.into());
+        return Err(INCORRECT_PROTOCOL_NAME_ERROR_MSG.into());
     }
 
     Ok(())
@@ -170,7 +169,7 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
     //TODO: The Server MUST respond to the 401 CONNECT Packet with a CONNACK return code 0x01 
     // (unacceptable protocol level) and then disconnect 402 the Client if the Protocol Level is not supported by the Server
     if byte[0] != CONNECT_PROTOCOL_LEVEL {
-        return Err("Invalid protocol level byte".into());
+        return Err(INCORRECT_PROTOCOL_LEVEL_ERROR_MSG.into());
     }
     Ok(())
 }
@@ -387,7 +386,7 @@ mod tests {
         let byte: [u8; 1] = [0x5];
         let to_test = verify_protocol_level_byte(&byte);
 
-        assert_eq!(to_test, Err("Invalid protocol level byte".to_owned()));
+        assert_eq!(to_test, Err(INCORRECT_PROTOCOL_LEVEL_ERROR_MSG.to_owned()));
     }
 
     #[test]
@@ -401,7 +400,7 @@ mod tests {
     fn error_mqtt_string_byte() {
         let bytes: [u8; 6] = [0x00, 0x05, 0x4D, 0x51, 0x54, 0x54];
         let to_test = verify_protocol_name_bytes(&bytes);
-        assert_eq!(to_test, Err(INCORRECT_PROTOCOL_NAME_ERROR.to_owned()));
+        assert_eq!(to_test, Err(INCORRECT_PROTOCOL_NAME_ERROR_MSG.to_owned()));
     }
 
     #[test]
