@@ -137,20 +137,12 @@ impl PacketProcessor {
         let clean_session = connect_packet.clean_session;
         let exists_previous_session = self.clients.contains_key(&client_id);
     
-        // si por este mismo stream ya se habia recibido un Connect, desconectar (PROTOCOL VIOLATION)
-        //    --> se hace en el c_h_reader
-        // si desde distintos steams se mandaron connects con mismo Client ID, desconectar al primero 
-        //cuando el segundo llegue
-
-        // Si hay un cliente con mismo client_id conectado, lo desconectamos AL PRIMERO!!!
-        // REVISAR esto que esta mal:!!
-        if let Some(previous_session) = self.clients.get(&client_id){
-            if previous_session.is_active() {
-                let previous_handler_id = previous_session.get_client_handler_id().unwrap();
-                self.handle_disconnect_error(previous_handler_id);
-                println!("El cliente ya estaba conectado");
-                //return Err("El cliente ya estaba conectado".into())
-
+        // Si hay un cliente con mismo client_id conectado, desconectamos la sesión del client anterior
+        if let Some(existing_session) = self.clients.get(&client_id){
+            if existing_session.is_active() {
+                let existing_handler_id = existing_session.get_client_handler_id().unwrap();
+                self.handle_disconnect_error(existing_handler_id);
+                println!("El cliente ya estaba conectado. Se remplazó la sesión por esta nueva.");
             }
         }
     
