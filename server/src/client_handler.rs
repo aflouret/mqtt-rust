@@ -100,6 +100,7 @@ struct ClientHandlerReader {
     id: u32,
     socket: TcpStream,
     sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,//Por acá manda paquetes al sv
+    already_connected: bool
 }
 
 impl ClientHandlerReader {
@@ -108,13 +109,22 @@ impl ClientHandlerReader {
             id,
             socket,
             sender,
+            already_connected: false
         }
     }
 
     pub fn receive_packet(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
         match Packet::read_from(&mut self.socket) {
-            Ok(packet) => if let Err(error) = self.sender.send((self.id, Ok(packet))) {
-                return Err(Box::new(error));
+            Ok(packet) => {
+                // Si es un Connect y ya había recibido un Connect antes, es un PROTOCOL VIOLATION: desconecto al client
+                if let Packet::Connect(_connect) = &packet {
+                    if self.already_connected {
+                            return Err(Box::new(SendError("PROTOCOL VIOLATION: Connect packet received twice")));
+                    }
+                }
+                if let Err(error) = self.sender.send((self.id, Ok(packet))) {
+                    return Err(Box::new(error));
+                }
             },
             Err(_) => {
                 self.sender.send((self.id, Err(Box::new(SendError("Socket Disconnect"))) )).unwrap();
