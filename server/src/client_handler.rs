@@ -1,6 +1,6 @@
 use std::net::TcpStream;
 use common::packet::{Packet};
-use common::all_packets::connect::{INCORRECT_PROTOCOL_LEVEL_ERROR_MSG};
+use common::all_packets::connect::INCORRECT_PROTOCOL_LEVEL_ERROR_MSG;
 use common::all_packets::connack::Connack;
 use std::sync::{Mutex, mpsc};
 use std::sync::mpsc::{Receiver, Sender, SendError};
