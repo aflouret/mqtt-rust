@@ -7,7 +7,7 @@ extern crate glib;
 extern crate gtk;
 
 use glib::clone;
-use gtk::{Application, Builder};
+use gtk::{Application, Builder, TextView};
 use gtk::prelude::*;
 use common::all_packets::connect::{Connect, ConnectPayload};
 use common::all_packets::publish::{Publish, PublishFlags};
@@ -22,6 +22,7 @@ mod client;
 mod client_controller;
 mod handlers;
 mod client_processor;
+mod response;
 
 // -> Result<(), Box<dyn std::error::Error>>
 /*
@@ -67,10 +68,10 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
         println!("RESPONSE: {:?}", &response);
         intern_sender.send(response);
     });
-    let username_label: gtk::Label = builder.object("usr_label").unwrap();
+    let topic_publish_label: gtk::Label = builder.object("topic_publish_label").unwrap();
 
     intern_recv.attach(None, move |text: String| {
-        username_label.set_text(text.as_str());
+        topic_publish_label.set_text(text.as_str());
         glib::Continue(true)
     });
 }
@@ -119,10 +120,14 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let retain_checkbox: gtk::CheckButton = builder.object("retain_checkbox").unwrap();
     let publish_button: gtk::Button = builder.object("publish_button").unwrap();
     publish_button.connect_clicked(clone!( @weak topic_pub_entry => move |_| {
+         let b = qos_1_rb.is_active();
+        println!("{:?}", &b);
+        let r = retain_checkbox.is_active();
+        println!("{:?}", &r);
         let publish_packet = Publish::new(
             PublishFlags::new(0b0100_1011),
             (&topic_pub_entry.text()).to_string(),
-            None,
+            Some(10),
             (&app_msg_entry.text()).to_string(),
         );
         let event_publish = EventHandlers::HandlePublish(HandlePublish::new(publish_packet));
@@ -133,9 +138,16 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
 fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let subscribe_button: gtk::Button = builder.object("suscribe_button").unwrap();
     let topic_subscribe_entry: gtk::Entry = builder.object("topic_suscribe_entry").unwrap();
+    let text_view: gtk::TextView = builder.object("text_view").unwrap();
+    let buffer: gtk::TextBuffer = builder.object("textbuffer1").unwrap();
+/*    buffer.set_text("Probando");
+    text_view.buffer().unwrap();*/
+/*    text_view.set_tooltip_text(Some("Probando"));*/
     subscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
+        buffer.set_text("Probando");
+        //text_view.buffer().unwrap();
         let mut subscribe_packet = Subscribe::new(10);
-        subscribe_packet.add_subscription(Subscription{topic_filter: (&topic_subscribe_entry.text()).to_string(), max_qos: Qos::AtMostOnce});
+        subscribe_packet.add_subscription(Subscription{topic_filter: (&topic_subscribe_entry.text()).to_string(), max_qos: Qos::AtLeastOnce});
 
         let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(subscribe_packet));
         sender.send(event_subscribe);

@@ -12,7 +12,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use common::logging::logger::{Logger, LogMessage};
-use common::all_packets::suback::{Suback, SubackReturnCode};
+use common::all_packets::suback::{Suback, SubackReturnCode, SUCCESS_MAX_QOS_0};
+use common::all_packets::suback::SubackReturnCode::SuccessAtMostOnce;
 use common::all_packets::subscribe::Subscribe;
 
 pub struct Message {
@@ -185,7 +186,7 @@ impl PacketProcessor {
                 }
             }
         }
-
+        suback_packet.add_return_code(SuccessAtMostOnce);///HARDCODED
         Ok(suback_packet)
 
     }
@@ -198,7 +199,7 @@ impl PacketProcessor {
         
         let packet_id = 1 as u16;
         let puback_packet_response = Puback::new(packet_id);
-        let current_session = self.clients.get_mut("u").unwrap(); //TODO: sacar unwrap
+        let current_session = self.clients.get_mut("a").unwrap(); //TODO: sacar unwrap
         let topic_name = &publish_packet.topic_name;
 
         //Retain Logic Publish
