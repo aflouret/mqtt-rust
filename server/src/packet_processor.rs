@@ -164,6 +164,7 @@ impl PacketProcessor {
                         
                         //Retain Logic Subscribe
                         if self.retained_messages.contains_key(&subscription.topic_filter) {
+                            println!("Entro retained mgss");
                             if let Some(message) = self.retained_messages.get(&subscription.topic_filter) {
                                 //Send publish al cliente con el mensaje en el retained_messages
                                 let publish_packet = Publish::new(
@@ -176,6 +177,7 @@ impl PacketProcessor {
                                 let senders_hash = self.senders_to_c_h_writers.read().unwrap();
                                 let sender = senders_hash.get(&client_handler_id).unwrap();
                                 let sender_mutex_guard = sender.lock().unwrap();
+                                println!("Publish a mandar: {:?}",&publish_packet);
                                 sender_mutex_guard.send(Ok(Packet::Publish(publish_packet))).unwrap();
                             }
                         };

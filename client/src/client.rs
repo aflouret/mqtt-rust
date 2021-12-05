@@ -86,7 +86,6 @@ impl Client {
     pub fn handle_response(mut s: TcpStream, sender: Sender<String>) {
         let handler_read = thread::spawn(move || {
             loop {
-                println!("RESPONSE SOCKET: {:?}", &s);
                 let receiver_packet = Packet::read_from(&mut s).unwrap();
                 match receiver_packet {
                     Packet::Connack(connack) => {
@@ -99,6 +98,9 @@ impl Client {
                     }
                     Packet::Suback(suback) => {
                         println!("Client: SUBACK packet successfull received");
+                    },
+                    Packet::Publish(publish) => {
+                        println!("RECIBI PUBLISH EN CLIENT: msg: {:?}", publish.application_message);
                     }
                     _ => (),
                 };
@@ -118,9 +120,8 @@ impl Client {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
             let subscribe_packet = subscribe.subscribe_packet;
-            println!("Envio subscribe packet: {:?}", &subscribe_packet);
+            println!("CLIENT: Envio subscribe packet: {:?}", &subscribe_packet);
             subscribe_packet.write_to(&mut s);
-            println!("SOCKET en SUBS: {:?}", &s);
         }
 
         Ok(())
@@ -131,9 +132,8 @@ impl Client {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
             let publish_packet = publish.publish_packet;
-            println!("Envio publish packet: {:?}", &publish_packet);
+            println!("CLIENT: Envio publish packet: {:?}", &publish_packet);
             publish_packet.write_to(&mut s);
-            println!("SOCKET en PUBLI: {:?}", &s);
         }
         Ok(())
     }

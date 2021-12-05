@@ -2,7 +2,15 @@ Servidor escuchando: 8080
 Connect Packet received from: 0
 Connack packet send it to: 0
 Subscribe Packet received from: 0
-Subscribe Packet received from: 0
+Publish Packet received from: 0
 Connect Packet received from: 1
 Connack packet send it to: 1
 Publish Packet received from: 1
+Connect Packet received from: 2
+Connack packet send it to: 2
+Connect Packet received from: 3
+Connack packet send it to: 3
+Connect Packet received from: 4
+Connack packet send it to: 4
+Connect Packet received from: 5
+Connack packet send it to: 5
