@@ -322,7 +322,6 @@
                 <property name="valign">center</property>
                 <property name="margin_top">10</property>
                 <property name="margin_bottom">10</property>
-                <property name="orientation">vertical</property>
                 <child>
                   <object class="GtkButton" id="connect_button">
                     <property name="label" translatable="yes">Connect</property>
@@ -331,11 +330,32 @@
                     <property name="receives_default">True</property>
                     <property name="halign">center</property>
                     <property name="valign">center</property>
+                    <property name="margin_left">20</property>
+                    <property name="margin_right">20</property>
+                    <property name="margin_top">20</property>
+                    <property name="margin_bottom">20</property>
                   </object>
                   <packing>
                     <property name="expand">False</property>
                     <property name="fill">True</property>
                     <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="disconnect_button">
+                    <property name="label" translatable="yes">Disconnect</property>
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="receives_default">True</property>
+                    <property name="margin_left">20</property>
+                    <property name="margin_right">20</property>
+                    <property name="margin_top">20</property>
+                    <property name="margin_bottom">20</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
                   </packing>
                 </child>
               </object>
@@ -574,51 +594,24 @@
             <property name="can_focus">False</property>
             <property name="halign">center</property>
             <property name="valign">center</property>
-            <property name="orientation">vertical</property>
-            <child>
-              <object class="GtkLabel" id="topic_suscribe_label">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <property name="margin_left">20</property>
-                <property name="margin_right">20</property>
-                <property name="margin_top">20</property>
-                <property name="margin_bottom">5</property>
-                <property name="label" translatable="yes">Topic</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkEntry" id="topic_suscribe_entry">
-                <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="margin_left">20</property>
-                <property name="margin_right">20</property>
-                <property name="margin_top">5</property>
-                <property name="margin_bottom">5</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
             <child>
               <object class="GtkBox">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
+                <property name="halign">center</property>
                 <property name="valign">center</property>
-                <property name="margin_top">5</property>
+                <property name="margin_left">20</property>
+                <property name="margin_right">20</property>
+                <property name="margin_top">20</property>
                 <property name="margin_bottom">20</property>
                 <property name="orientation">vertical</property>
                 <child>
-                  <object class="GtkLabel" id="qoslvl_label1">
+                  <object class="GtkLabel" id="topic_suscribe_label">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">QoS Level</property>
+                    <property name="margin_top">20</property>
+                    <property name="margin_bottom">5</property>
+                    <property name="label" translatable="yes">Topic</property>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -627,19 +620,31 @@
                   </packing>
                 </child>
                 <child>
+                  <object class="GtkEntry" id="topic_suscribe_entry">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="margin_top">5</property>
+                    <property name="margin_bottom">5</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
                   <object class="GtkBox">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="halign">center</property>
                     <property name="valign">center</property>
+                    <property name="margin_top">5</property>
+                    <property name="margin_bottom">20</property>
+                    <property name="orientation">vertical</property>
                     <child>
-                      <object class="GtkRadioButton" id="qos_0_radiobutton1">
-                        <property name="label" translatable="yes">0</property>
+                      <object class="GtkLabel" id="qoslvl_label1">
                         <property name="visible">True</property>
-                        <property name="can_focus">True</property>
-                        <property name="receives_default">False</property>
-                        <property name="draw_indicator">True</property>
-                        <property name="group">qos_1_radiobutton</property>
+                        <property name="can_focus">False</property>
+                        <property name="label" translatable="yes">QoS Level</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -648,14 +653,41 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkRadioButton" id="qos_1_radiobutton1">
-                        <property name="label" translatable="yes">1</property>
+                      <object class="GtkBox">
                         <property name="visible">True</property>
-                        <property name="can_focus">True</property>
-                        <property name="receives_default">False</property>
-                        <property name="active">True</property>
-                        <property name="draw_indicator">True</property>
-                        <property name="group">qos_0_radiobutton1</property>
+                        <property name="can_focus">False</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <child>
+                          <object class="GtkRadioButton" id="qos_0_radiobutton1">
+                            <property name="label" translatable="yes">0</property>
+                            <property name="visible">True</property>
+                            <property name="can_focus">True</property>
+                            <property name="receives_default">False</property>
+                            <property name="draw_indicator">True</property>
+                            <property name="group">qos_1_radiobutton</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkRadioButton" id="qos_1_radiobutton1">
+                            <property name="label" translatable="yes">1</property>
+                            <property name="visible">True</property>
+                            <property name="can_focus">True</property>
+                            <property name="receives_default">False</property>
+                            <property name="draw_indicator">True</property>
+                            <property name="group">qos_0_radiobutton1</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -667,46 +699,121 @@
                   <packing>
                     <property name="expand">False</property>
                     <property name="fill">True</property>
-                    <property name="position">1</property>
+                    <property name="position">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="suscribe_button">
+                    <property name="label" translatable="yes">Subscribe</property>
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="receives_default">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="margin_top">5</property>
+                    <property name="margin_bottom">20</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">3</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkTextView" id="text_view">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="margin_bottom">70</property>
+                    <property name="buffer">textbuffer1</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">4</property>
                   </packing>
                 </child>
               </object>
               <packing>
                 <property name="expand">False</property>
                 <property name="fill">True</property>
-                <property name="position">2</property>
+                <property name="position">0</property>
               </packing>
             </child>
             <child>
-              <object class="GtkButton" id="suscribe_button">
-                <property name="label" translatable="yes">Subscribe</property>
+              <object class="GtkBox">
                 <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="receives_default">True</property>
+                <property name="can_focus">False</property>
                 <property name="halign">center</property>
                 <property name="valign">center</property>
                 <property name="margin_left">20</property>
                 <property name="margin_right">20</property>
-                <property name="margin_top">5</property>
+                <property name="margin_top">20</property>
                 <property name="margin_bottom">20</property>
+                <property name="orientation">vertical</property>
+                <child>
+                  <object class="GtkLabel" id="topic_unsubscribe_label">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="margin_top">20</property>
+                    <property name="margin_bottom">5</property>
+                    <property name="label" translatable="yes">Topic</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkEntry" id="topic_unsubscribe_entry">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="margin_top">5</property>
+                    <property name="margin_bottom">5</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkBox">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="valign">center</property>
+                    <property name="margin_top">5</property>
+                    <property name="margin_bottom">20</property>
+                    <property name="orientation">vertical</property>
+                    <child>
+                      <object class="GtkButton" id="unsubscribe_button">
+                        <property name="label" translatable="yes">Unsubscribe</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="halign">center</property>
+                        <property name="valign">center</property>
+                        <property name="margin_top">5</property>
+                        <property name="margin_bottom">20</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">0</property>
+                      </packing>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">2</property>
+                  </packing>
+                </child>
               </object>
               <packing>
                 <property name="expand">False</property>
                 <property name="fill">True</property>
-                <property name="position">3</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkTextView" id="text_view">
-                <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="margin_bottom">70</property>
-                <property name="buffer">textbuffer1</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">4</property>
+                <property name="position">1</property>
               </packing>
             </child>
           </object>
