@@ -55,8 +55,11 @@ impl Client {
 
     pub fn start_client(mut self, recv_conection: Receiver<EventHandlers>, sender_to_window: Sender<String>) -> Result<(), Box<dyn std::error::Error>> {
         thread::spawn(move || {
+
+            //esperas un handle_connection
+
             loop {
-                if let Ok(conection) = recv_conection.recv() { //recv_timeout()
+                if let Ok(conection) = recv_conection.recv() { //recv_timeout(Duration::new(keep_alive_sec))
                     match conection {
                         EventHandlers::HandleConection(conec) => {
                             self.handle_conection(conec, sender_to_window.clone()).unwrap();
@@ -71,6 +74,7 @@ impl Client {
                             self.handle_subscribe(subscribe).unwrap();
                         }
                         _ => ()
+                        //mpsc::RecvTimeoutError::Timeout => send pingreq 
                     };
                 }
             }

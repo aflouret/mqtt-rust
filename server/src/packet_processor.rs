@@ -150,7 +150,7 @@ impl PacketProcessor {
             for (_, session) in &mut self.clients {
                 if let Some(client_handler_id)  = session.get_client_handler_id() {
                     if client_handler_id == c_h_id {
-                        /*if subscription_is_valid() true == false {
+                        if /*subscription_is_valid()*/true == false {
                             let return_code = SubackReturnCode::Failure;
                             suback_packet.add_return_code(return_code);
                         } else {
@@ -161,8 +161,7 @@ impl PacketProcessor {
                             session.add_subscription(subscription.clone());
                             suback_packet.add_return_code(return_code)
                         }
-                        */
-
+                        
                         //Retain Logic Subscribe
                         if self.retained_messages.contains_key(&subscription.topic_filter) {
                             if let Some(message) = self.retained_messages.get(&subscription.topic_filter) {
@@ -186,7 +185,7 @@ impl PacketProcessor {
                 }
             }
         }
-        suback_packet.add_return_code(SuccessAtMostOnce);///HARDCODED
+        //suback_packet.add_return_code(SuccessAtMostOnce);///HARDCODED
         Ok(suback_packet)
 
     }
@@ -196,13 +195,15 @@ impl PacketProcessor {
         //Sacamos el packet_id del pubblish
         //Sacar info del publish
         //Mandamos el puback al client.
-        
-        let packet_id = 1 as u16;
-        let puback_packet_response = Puback::new(packet_id);
-        let current_session = self.clients.get_mut("a").unwrap(); //TODO: sacar unwrap
+
+        //let current_session = self.clients.get_mut("a").unwrap(); //TODO: sacar unwrap
         let topic_name = &publish_packet.topic_name;
 
         //Retain Logic Publish
+        //A PUBLISH Packet with a RETAIN flag set to 1 and a payload containing zero bytes will be processed as normal by the Server
+        //and sent to Clients with a subscription matching the topic name.
+        //Additionally any existing retained message with the same topic name MUST be removed and any future subscribers
+        //for the topic will not receive a retained message
         if publish_packet.flags.retain {
             self.retained_messages.insert(topic_name.clone(), Message {
                 message: publish_packet.application_message.clone(),
@@ -222,11 +223,11 @@ impl PacketProcessor {
                 }
             }
         }
-        println!("Se envio correctamente el PUBACK");
 
         if publish_packet.flags.qos_level == Qos::AtMostOnce {
             Ok(None)
         } else {
+            println!("Se envio correctamente el PUBACK");
             Ok(Some(Puback::new(publish_packet.packet_id.unwrap())))
         }
     }
