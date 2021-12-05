@@ -2,6 +2,7 @@ use std::convert::TryInto;
 use common::all_packets::connect::Connect;
 use common::all_packets::connack::Connack;
 use common::all_packets::publish::{Publish, PublishFlags};
+use common::all_packets::pingreq::Pingreq;
 use std::time::Duration;
 
 use common::packet::Packet;
@@ -55,28 +56,43 @@ impl Client {
 
     pub fn start_client(mut self, recv_conection: Receiver<EventHandlers>, sender_to_window: Sender<String>) -> Result<(), Box<dyn std::error::Error>> {
         thread::spawn(move || {
-
             //esperas un handle_connection
-
+            let mut keep_alive_sec: u16 = 0;
             loop {
-                if let Ok(conection) = recv_conection.recv() { //recv_timeout(Duration::new(keep_alive_sec))
+                if let Ok(conection) = recv_conection.recv() { 
                     match conection {
                         EventHandlers::HandleConection(conec) => {
-                            self.handle_conection(conec, sender_to_window.clone()).unwrap();
+                            self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
                             println!("ClientConectado");
+                            break;
                         }
-                        EventHandlers::HandlePublish(publish) => {
-                            println!("Entro a publish conn");
-                            //Client::handle_publish(&mut self.server_stream, publish).unwrap();
-                            self.handle_publish(publish).unwrap();
-                        }
-                        EventHandlers::HandleSubscribe(subscribe) => {
-                            self.handle_subscribe(subscribe).unwrap();
-                        }
-                        _ => ()
-                        //mpsc::RecvTimeoutError::Timeout => send pingreq 
+                        _ => println!("Primero se debe conectar"),
                     };
                 }
+            }
+
+            loop {
+                match recv_conection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
+                    Ok(EventHandlers::HandleConection(conec)) => {
+                        //self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
+                        println!("El cliente ya está conectado"); //Revisar que hacer en este caso
+                    }
+                    
+                    Ok(EventHandlers::HandlePublish(publish)) => {
+                        println!("Entro a publish conn");
+                        //Client::handle_publish(&mut self.server_stream, publish).unwrap();
+                        self.handle_publish(publish).unwrap();
+                    }
+                    Ok(EventHandlers::HandleSubscribe(subscribe)) => {
+                        self.handle_subscribe(subscribe).unwrap();
+                    }
+
+                    Err(mpsc::RecvTimeoutError::Timeout) => { 
+                        self.handle_pingreq().unwrap(); 
+                    }
+
+                    _ => ()
+                };
             }
         });
 
@@ -102,10 +118,24 @@ impl Client {
                     Packet::Publish(publish) => {
                         println!("RECIBI PUBLISH EN CLIENT: msg: {:?}", publish.application_message);
                     }
+                    Packet::Pingresp(_pingresp) => {
+                        println!("RECIBI PINGRESP EN CLIENT");
+                    }
                     _ => (),
                 };
             }
         });
+    }
+
+    pub fn handle_pingreq(&mut self) -> io::Result<()>{
+        if let Some(socket) = &mut self.server_stream {
+            let mut s = socket.try_clone()?;
+            let pingreq_packet = Pingreq{}; //Usar new una vez mergeado
+            println!("CLIENT: Envio pinreq packet");
+            pingreq_packet.write_to(&mut s);
+        }
+
+        Ok(())
     }
 
     pub fn get_socket(&mut self) -> Option<TcpStream> {
@@ -138,12 +168,13 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<String>) -> io::Result<()> {
+    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<String>, keep_alive_sec: &mut u16) -> io::Result<()> {
         println!("{:?}", conec);
         let address = conec.get_address();
         let mut socket = TcpStream::connect(address.clone()).unwrap();
         println!("Conectándome a {:?}", address);
         let connect_packet = conec.connect_packet;
+        *keep_alive_sec = connect_packet.keep_alive_seconds.clone();
         Client::handle_response(socket.try_clone().unwrap(), sender_to_window);
         connect_packet.write_to(&mut socket);
         self.set_server_stream(socket);
