@@ -16,7 +16,7 @@ use std::io::{BufRead, BufReader, Read};
 use crate::client::ClientStatus::{StatusOff, StatusOn};
 use crate::client_controller::ClientController;
 use crate::client_processor::ClientProcessor;
-use crate::handlers::{EventHandlers, HandlePublish, HandleSubscribe};
+use crate::handlers::{EventHandlers, HandlePublish, HandleSubscribe, HandleUnsubscribe};
 use crate::HandleConection;
 
 #[derive(Debug)]
@@ -85,6 +85,9 @@ impl Client {
                     }
                     Ok(EventHandlers::HandleSubscribe(subscribe)) => {
                         self.handle_subscribe(subscribe).unwrap();
+                    },
+                    Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
+                        self.handle_unsubscribe(unsubs).unwrap();
                     }
 
                     Err(mpsc::RecvTimeoutError::Timeout) => { 
@@ -110,14 +113,18 @@ impl Client {
                     }
                     Packet::Puback(puback) => {
                         println!("Client: PUBACK packet successfull received");
-                        sender.send("Topic Successfully published".to_string());
+                        //sender.send("Topic Successfully published".to_string());
                     }
                     Packet::Suback(suback) => {
                         println!("Client: SUBACK packet successfull received");
                     },
+                    Packet::Unsuback(unsuback ) => {
+                        println!("Client: UNSUBACK packet successfull received");
+                    },
                     Packet::Publish(publish) => {
-                        println!("RECIBI PUBLISH EN CLIENT: msg: {:?}", publish.application_message);
-                    }
+                        println!("RECIBI PUBLISH EN CLIENT: msg: {:?}", &publish.application_message);
+                        sender.send(publish.application_message.to_string());
+                    },
                     Packet::Pingresp(_pingresp) => {
                         println!("RECIBI PINGRESP EN CLIENT");
                     }
@@ -143,6 +150,18 @@ impl Client {
             Some(socket);
         }
         None
+    }
+
+
+    pub fn handle_unsubscribe(&mut self, mut unsubs: HandleUnsubscribe) -> io::Result<()> {
+        if let Some(socket) = &mut self.server_stream {
+            let mut s = socket.try_clone()?;
+            let unsubscribe_packet = unsubs.unsubscribe_packet;
+            println!("CLIENT: Envio unsubscribe packet: {:?}", &unsubscribe_packet);
+            unsubscribe_packet.write_to(&mut s);
+        }
+
+        Ok(())
     }
 
     pub fn handle_subscribe(&mut self, mut subscribe: HandleSubscribe) -> io::Result<()> {

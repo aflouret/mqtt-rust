@@ -2,11 +2,13 @@
 use common::all_packets::connect::{Connect, ConnectPayload};
 use common::all_packets::publish::Publish;
 use common::all_packets::subscribe::Subscribe;
+use common::all_packets::unsubscribe::Unsubscribe;
 
 pub enum EventHandlers {
     HandleConection(HandleConection),
     HandlePublish(HandlePublish),
     HandleSubscribe(HandleSubscribe),
+    HandleUnsubscribe(HandleUnsubscribe),
 }
 
 #[derive(Debug)]
@@ -44,8 +46,21 @@ pub struct HandleSubscribe {
 }
 
 impl HandleSubscribe {
-    pub fn new(subscribe_packet: Subscribe)  -> Self {
-        Self{subscribe_packet: subscribe_packet}
+    pub fn new(subscribe_packet: Subscribe) -> Self {
+        Self { subscribe_packet: subscribe_packet }
+    }
+}
+
+
+
+#[derive(Debug)]
+pub struct HandleUnsubscribe {
+    pub unsubscribe_packet: Unsubscribe,
+}
+
+impl HandleUnsubscribe {
+    pub fn new(unsubscribe_packet: Unsubscribe)  -> Self {
+        Self{unsubscribe_packet: unsubscribe_packet}
     }
 
 }

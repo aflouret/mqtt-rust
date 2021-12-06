@@ -565,6 +565,10 @@
                 <property name="halign">center</property>
                 <property name="valign">center</property>
                 <property name="label" translatable="yes">Publish sent succesfully</property>
+                <attributes>
+                <attribute name="font-desc" value="Sans Bold Italic 10"/>
+                <attribute name="foreground" value="#34eb37"/>
+                </attributes>
               </object>
               <packing>
                 <property name="expand">False</property>
