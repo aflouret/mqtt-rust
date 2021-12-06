@@ -143,7 +143,7 @@ impl PacketProcessor {
             if existing_session.is_active() {
                 let existing_handler_id = existing_session.get_client_handler_id().unwrap();
                 self.handle_disconnect_error(existing_handler_id);
-                println!("El cliente ya estaba conectado. Se remplazó la sesión por esta nueva.");
+                self.logger.log_msg(LogMessage::new("El cliente ya estaba conectado. Se remplazó la sesión por la nueva".to_string(), client_id.clone()))?;
             }
         }
     

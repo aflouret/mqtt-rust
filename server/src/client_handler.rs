@@ -1,12 +1,14 @@
 use std::net::TcpStream;
 use common::packet::{Packet};
-use common::all_packets::connect::INCORRECT_PROTOCOL_LEVEL_ERROR_MSG;
+use common::all_packets::connect::{INCORRECT_PROTOCOL_LEVEL_ERROR_MSG, INCORRECT_PROTOCOL_LEVEL_RETURN_CODE};
 use common::all_packets::connack::Connack;
 use std::sync::{Mutex, mpsc};
 use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use std::collections::HashMap;
+
+const SOCKET_DISCONNECT_ERROR_MSG: &str = "Disconnectiong Socket due to Error";
 
 pub struct ClientHandler {
     id: u32,
@@ -145,14 +147,15 @@ impl ClientHandlerReader {
                     println!("{}", error.to_string());
                     // [MQTT-3.1.2-2]. Enviamos un connack con 0x1 y desconectamos. 
                     // [MQTT-3.2.2-4]. Por eso session_present = false
-                    let connack = Connack::new(false, 0x1);
+                    let connack = Connack::new(false, 
+                        INCORRECT_PROTOCOL_LEVEL_RETURN_CODE);
                     self.reader_to_writer_tx.send(Ok(Packet::Connack(connack))).unwrap();
                 
                     std::thread::sleep(std::time::Duration::from_millis(1000));
                 }
                 
-                self.sender.send((self.id, Err(Box::new(SendError("Socket Disconnect"))) )).unwrap();
-                return Err(Box::new(SendError("Socket Disconnect")));
+                self.sender.send((self.id, Err(Box::new(SendError(SOCKET_DISCONNECT_ERROR_MSG))) )).unwrap();
+                return Err(Box::new(SendError(SOCKET_DISCONNECT_ERROR_MSG)));
             },
 
         }
