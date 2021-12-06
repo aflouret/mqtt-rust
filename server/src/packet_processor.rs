@@ -1,13 +1,15 @@
 use crate::session::Session;
+use crate::topic_filters;
 use common::all_packets::connack::Connack;
 use common::all_packets::connect::Connect;
 use common::all_packets::unsuback::Unsuback;
 use common::all_packets::unsubscribe::Unsubscribe;
 use common::packet::{Packet, Qos};
 use std::collections::HashMap;
+use std::time::Duration;
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::puback::Puback;
-use std::sync::{Mutex};
+use std::sync::{Mutex, mpsc};
 use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
@@ -29,6 +31,7 @@ pub struct PacketProcessor {
     senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
     logger: Arc<Logger>,
     retained_messages: HashMap<String, Message>,
+    qos_1_senders: HashMap<u16, Sender<()>>,
 }
 
 impl PacketProcessor {
@@ -42,6 +45,7 @@ impl PacketProcessor {
             senders_to_c_h_writers,
             logger,
             retained_messages: HashMap::<String, Message>::new(),
+            qos_1_senders: HashMap::<u16, Sender<()>>::new(),
         }
     }
 
@@ -123,10 +127,7 @@ impl PacketProcessor {
             };
 
         if let Some(response_packet) = response_packet{
-            let senders_hash = self.senders_to_c_h_writers.read().unwrap();
-            let sender = senders_hash.get(&c_h_id).unwrap();
-            let sender_mutex_guard = sender.lock().unwrap();
-            sender_mutex_guard.send(response_packet).unwrap();
+            self.send_packet_to_client_handler(c_h_id, response_packet);
         }
         
         Ok(())
@@ -175,16 +176,17 @@ impl PacketProcessor {
     pub fn handle_unsubscribe_packet(&mut self, unsubscribe_packet: Unsubscribe, c_h_id: u32) -> Result<Unsuback, Box<dyn std::error::Error>> {
         println!("Se recibió el subscribe packet");
 
+        let client_id = self.get_client_id_from_handler_id(c_h_id);
+        let session;
+        if let Some(client_id) = client_id {
+            session = self.clients.get_mut(&client_id).unwrap();
+        } else {
+            return Err("Client not found".into());
+        }
+
         let unsuback_packet = Unsuback::new(unsubscribe_packet.packet_id);
         for subscription in unsubscribe_packet.topics {
-            for (_, session) in &mut self.clients {
-                if let Some(client_handler_id)  = session.get_client_handler_id() {
-                    if client_handler_id == c_h_id {
-                        session.remove_subscription(subscription);
-                        break;
-                    }
-                }
-            }
+            session.remove_subscription(subscription);
         }
 
         Ok(unsuback_packet)
@@ -194,48 +196,46 @@ impl PacketProcessor {
     pub fn handle_subscribe_packet(&mut self, subscribe_packet: Subscribe, c_h_id: u32) -> Result<Suback, Box<dyn std::error::Error>> {
         println!("Se recibió el subscribe packet");
 
-
+        let mut client_id = self.get_client_id_from_handler_id(c_h_id);
+        let mut session;
+        if let Some(client_id) = client_id {
+            session = self.clients.get_mut(&client_id).unwrap();
+        } else {
+            return Err("Client not found".into());
+        }
 
         let mut suback_packet = Suback::new(subscribe_packet.packet_id);
         for subscription in subscribe_packet.subscriptions {
-            for (_, session) in &mut self.clients {
-                if let Some(client_handler_id)  = session.get_client_handler_id() {
-                    if client_handler_id == c_h_id {
-                        if /*subscription_is_valid()*/true == false {
-                            let return_code = SubackReturnCode::Failure;
-                            suback_packet.add_return_code(return_code);
-                        } else {
-                            let return_code = match subscription.max_qos {
-                                Qos::AtMostOnce => SubackReturnCode::SuccessAtMostOnce,
-                                _ => SubackReturnCode::SuccessAtLeastOnce,
-                            };
-                            session.add_subscription(subscription.clone());
-                            suback_packet.add_return_code(return_code)
-                        }
-                        
-                        //Retain Logic Subscribe
-                        if self.retained_messages.contains_key(&subscription.topic_filter) {
-                            println!("Entro retained mgss");
-                            if let Some(message) = self.retained_messages.get(&subscription.topic_filter) {
-                                //Send publish al cliente con el mensaje en el retained_messages
-                                let publish_packet = Publish::new(
-                                    PublishFlags::new(0b0011_0011),
-                                    subscription.topic_filter,
-                                    None,
-                                    message.message.clone(),
-                                );
+            if /*subscription_is_valid()*/true == false {
+                let return_code = SubackReturnCode::Failure;
+                suback_packet.add_return_code(return_code);
+            } else {
+                let return_code = match subscription.max_qos {
+                    Qos::AtMostOnce => SubackReturnCode::SuccessAtMostOnce,
+                    _ => SubackReturnCode::SuccessAtLeastOnce,
+                };
+                session.add_subscription(subscription.clone());
+                suback_packet.add_return_code(return_code)
+            }
+            
+            //Retain Logic Subscribe
+            
+            if let Some(message) = self.retained_messages.keys().find( |topic| 
+                topic_filters::filter_matches_topic(&subscription.topic_filter, topic)
+            ) {
+                //Send publish al cliente con el mensaje en el retained_messages
+                let publish_packet = Publish::new(
+                    PublishFlags::new(0b0011_0011),
+                    subscription.topic_filter,
+                    None,
+                    message.clone(),
+                );
+                println!("Publish a mandar: {:?}",&publish_packet);
 
-                                let senders_hash = self.senders_to_c_h_writers.read().unwrap();
-                                let sender = senders_hash.get(&client_handler_id).unwrap();
-                                let sender_mutex_guard = sender.lock().unwrap();
-                                println!("Publish a mandar: {:?}",&publish_packet);
-                                sender_mutex_guard.send(Ok(Packet::Publish(publish_packet))).unwrap();
-                            }
-                        };
-
-                        break;
-                    }
-                }
+                let senders_hash = self.senders_to_c_h_writers.read().unwrap();
+                let sender = senders_hash.get(&c_h_id).unwrap();
+                let sender_mutex_guard = sender.lock().unwrap();
+                sender_mutex_guard.send(Ok(Packet::Publish(publish_packet))).unwrap();
             }
         }
         //suback_packet.add_return_code(SuccessAtMostOnce);///HARDCODED
@@ -264,24 +264,94 @@ impl PacketProcessor {
             });
         }
 
-        let publish_send = publish_packet.clone();
+        match publish_packet.flags.qos_level {
+            Qos::AtMostOnce => {
+                self.handle_publish_packet_qos0(publish_packet, c_h_id)
+            },
+            _ => {
+                self.handle_publish_packet_qos1(publish_packet, c_h_id)
+            }
+        }
+    }
 
-        for (c_h_id, session) in &self.clients {
-            if session.is_subscribed_to(&topic_name) {
+    fn handle_publish_packet_qos0(&mut self, publish_packet: Publish, c_h_id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
+        let publish_send = Publish::new(
+            PublishFlags::new(0b0000_0000),
+            publish_packet.topic_name.clone(),
+            publish_packet.packet_id,
+            publish_packet.application_message.clone(),
+        );
+        
+        for (_, session) in &self.clients {
+            if session.is_subscribed_to(&publish_packet.topic_name) {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
-                    let senders_hash = self.senders_to_c_h_writers.read().unwrap();
-                    let sender = senders_hash.get(&client_handler_id).unwrap();
-                    let sender_mutex_guard = sender.lock().unwrap();
-                    sender_mutex_guard.send(Ok(Packet::Publish(publish_send.clone()))).unwrap();
+                    self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
                 }
             }
         }
+        return Ok(None);
+    }
 
-        if publish_packet.flags.qos_level == Qos::AtMostOnce {
-            Ok(None)
-        } else {
-            println!("Se envio correctamente el PUBACK");
-            Ok(Some(Puback::new(publish_packet.packet_id.unwrap())))
+    fn handle_publish_packet_qos1(&mut self, publish_packet: Publish, c_h_id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
+        let packet_id = publish_packet.packet_id;
+
+        let publish_send = Publish::new(
+            PublishFlags::new(0b0000_0010),
+            publish_packet.topic_name.clone(),
+            packet_id,
+            publish_packet.application_message.clone(),
+        );    
+        
+        self.send_packet_to_client_handler(c_h_id, Ok(Packet::Publish(publish_send.clone())));
+
+        let senders_clone = self.senders_to_c_h_writers.clone();
+        let (tx, rx) = mpsc::channel();
+        self.qos_1_senders.insert(publish_packet.packet_id.unwrap(), tx);
+
+        thread::spawn(move || {
+            loop {
+                if let Err(_) = rx.recv_timeout(Duration::from_millis(1000)) {
+                    let publish_send = Publish::new(
+                        PublishFlags::new(0b0000_1010),
+                        publish_packet.topic_name.clone(),
+                        packet_id,
+                        publish_packet.application_message.clone(),
+                    );    
+                    let senders_hash = senders_clone.read().unwrap();
+                    let sender = senders_hash.get(&c_h_id).unwrap();
+                    let sender_mutex_guard = sender.lock().unwrap();
+                    sender_mutex_guard.send(Ok(Packet::Publish(publish_send.clone()))).unwrap();
+                } else {
+                    break;
+                }
+            }
+        });
+        println!("Se envio correctamente el PUBACK");
+        return Ok(Some(Puback::new(packet_id.unwrap())));
+    }
+
+    pub fn handle_puback_packet(&mut self, puback_packet: Puback, c_h_id: u32) -> Result<(), Box<dyn std::error::Error>> {
+        
+        if let Some(sender) = self.qos_1_senders.get_mut(&puback_packet.packet_id) {
+            sender.send(()).unwrap();
+            return Ok(());
         }
+        Err("packet not found".into())
+    }
+
+    fn get_client_id_from_handler_id(&self, c_h_id: u32) -> Option<String> {
+        for (client_id, session) in &self.clients {
+            if session.is_active() && session.get_client_handler_id().unwrap() == c_h_id {
+                return Some(client_id.to_string());
+            }
+        }
+        None
+    }
+
+    fn send_packet_to_client_handler(&self, c_h_id: u32, packet: Result<Packet, Box<dyn std::error::Error + Send>>) {
+        let senders_hash = self.senders_to_c_h_writers.read().unwrap();
+        let sender = senders_hash.get(&c_h_id).unwrap();
+        let sender_mutex_guard = sender.lock().unwrap();
+        sender_mutex_guard.send(packet).unwrap();
     }
 }
