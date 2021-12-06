@@ -1,8 +1,8 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug};
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::{mpsc, Mutex};
-use std::sync::mpsc::{Receiver, Sender, SendError};
+use std::sync::mpsc::{Sender};
 use std::thread;
 
 
@@ -19,7 +19,6 @@ impl Logger {
                     let msg = receiver.recv();
                     if let Ok(m) = msg {
                         file.write(m.msg_to_string().as_bytes());
-
                     }
                 }
             );
@@ -45,7 +44,7 @@ impl Logger {
 
 #[derive(Clone, Debug)]
 pub struct LogMessage {
-    clientId: String,
+    client_id: String,
     message: String,
 }
 /*
@@ -58,13 +57,13 @@ impl Debug for LogMessage {
 impl LogMessage {
     pub fn new(msg: String ,client: String) -> LogMessage {
         LogMessage {
-            clientId: client,
+            client_id: client,
             message: msg,
         }
     }
 
     pub fn msg_to_string(self) -> String {
-        let s = self.message + " " + &*self.clientId + "\n";
+        let s = self.message + " " + &*self.client_id + "\n";
         return s.to_string();
     }
 

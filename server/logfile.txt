@@ -3,3 +3,5 @@ Connect Packet received from: 0
 Connack packet send it to: 0
 Connect Packet received from: 1
 Connack packet send it to: 1
+Subscribe Packet received from: 1
+Publish Packet received from: 0

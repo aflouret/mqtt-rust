@@ -8,6 +8,12 @@ pub const PINGREQ_PACKET_TYPE: u8 = 0xc0;
 #[derive(Debug)]
 pub struct Pingreq;
 
+impl Pingreq {
+    pub fn new() -> Pingreq{
+        Pingreq {}
+    }
+}
+
 impl WritePacket for Pingreq {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         // FIXED HEADER

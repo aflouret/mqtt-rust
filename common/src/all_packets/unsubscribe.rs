@@ -81,9 +81,11 @@ impl ReadPacket for Unsubscribe {
         let mut packet_unsubscribe = Unsubscribe::new(packet_identifier);
         loop {
             match decode_mqtt_string(&mut remaining_bytes){
-                Err(e) => match e.kind(){
-                    UnexpectedEof => break,
-                    _ => return Err(Box::new(e)),
+                Err(e) => {
+                    match e.kind(){
+                        UnexpectedEof => break,
+                        _ => return Err(Box::new(e)),
+                    }
                 },
                 Ok(topic) => packet_unsubscribe.add_topic(topic),
             }
