@@ -6,6 +6,7 @@ use crate::parser::encode_mqtt_string;
 
 use std::io::Cursor;
 use std::io::{Read, Write};
+use std::ops::RangeInclusive;
 
 const PROTOCOL_NAME: &str = "MQTT";
 pub const CONNECT_PACKET_TYPE: u8 = 0x10;
@@ -19,6 +20,19 @@ const LAST_WILL_QOS_LSB_FLAG: u8 = 0b0000_1000;
 const LAST_WILL_FLAG: u8 = 0b0000_0100;
 const CLEAN_SESSION_FLAG: u8 = 0b0000_0010;
 const RESERVED_BIT: u8 = 0b0000_0001;
+const ALLOWED_CHARS_CLIENT_ID: &str = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const ALLOWED_RANGE_CLIENT_ID: RangeInclusive<usize> = 1..=23;
+
+pub const INCORRECT_PROTOCOL_NAME_ERROR_MSG: &str = "Disconnecting: Incorrect Protocol Name";
+pub const INCORRECT_PROTOCOL_LEVEL_ERROR_MSG: &str = "SendingConnackAndDisconnecting: Incorrect Protocol Level";
+const QOF_2_REQUESTED_ERROR_MSG: &str = "Disconnecting: 4th msb of Connect flags is 1. Should be 0";
+const RESERVED_BIT_SHOULD_BE_ZERO_ERROR_MSG: &str = "Disconnecting: Reserved bit of Connect flags should be 0";
+const INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG: &str = "Disconnecting: Incompatible Connect payload and flags";
+const INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG: &str = "Disconnecting: Incompatible Connect flags";
+const INVALID_CLIENT_ID_ERROR_MSG: &str = "Disconnecting: Invalid Client ID";
+
+pub const INCORRECT_PROTOCOL_LEVEL_RETURN_CODE: u8 = 0x01;
+
 
 #[derive(Debug)]
 pub struct Connect {
@@ -123,7 +137,7 @@ impl ReadPacket for Connect {
 
         let mut mqtt_string_bytes = [0u8; 6];
         remaining_bytes.read_exact(&mut mqtt_string_bytes)?;
-        verify_mqtt_string_bytes(&mqtt_string_bytes)?;
+        verify_protocol_name_bytes(&mqtt_string_bytes)?; 
 
         let mut protocol_level_byte = [0u8; 1];
         remaining_bytes.read_exact(&mut protocol_level_byte)?;
@@ -152,10 +166,11 @@ impl ReadPacket for Connect {
     }
 }
 
-fn verify_mqtt_string_bytes(bytes: &[u8; 6]) -> Result<(), String> {
+fn verify_protocol_name_bytes(bytes: &[u8; 6]) -> Result<(), String> {
     let mqtt_string_bytes = encode_mqtt_string(PROTOCOL_NAME)?;
     if mqtt_string_bytes != *bytes {
-        return Err("It's not MQTT".into());
+        // [MQTT-3.1.2-1]. 
+        return Err(INCORRECT_PROTOCOL_NAME_ERROR_MSG.into());
     }
 
     Ok(())
@@ -165,20 +180,16 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
     //TODO: The Server MUST respond to the 401 CONNECT Packet with a CONNACK return code 0x01 
     // (unacceptable protocol level) and then disconnect 402 the Client if the Protocol Level is not supported by the Server
     if byte[0] != CONNECT_PROTOCOL_LEVEL {
-        return Err("Invalid protocol level byte".into());
+        return Err(INCORRECT_PROTOCOL_LEVEL_ERROR_MSG.into());
     }
     Ok(())
 }
 
 fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
-    if !flags.last_will_flag && (flags.last_will_retain || flags.last_will_qos ) {
-        return Err("Invalid last will flags".into());
-    }
-    if !flags.last_will_qos && flags.last_will_flag {
-        return Err("Invalid last will flags".into());
-    }
-    if !flags.username && flags.password {
-        return Err("Invalid Username and Password flags".into());
+    if (!flags.last_will_flag && (flags.last_will_retain || flags.last_will_qos)) 
+        || (!flags.last_will_qos && flags.last_will_flag)
+        || (!flags.username && flags.password) {
+        return Err(INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG.into());
     }
 
     Ok(())
@@ -194,9 +205,18 @@ fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), 
         || (payload.last_will_topic.is_some() && !flags.last_will_flag)
         || (payload.last_will_topic.is_none() && flags.last_will_flag)
     {
-        return Err("Invalid Payload".into());
+        return Err(INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG.into());  
     }
 
+    Ok(())
+}
+
+fn verify_client_id(client_id: &String) -> Result<(), Box<dyn std::error::Error>>{
+    if ! client_id.chars().all(|c| ALLOWED_CHARS_CLIENT_ID.contains(c))
+    || ! ALLOWED_RANGE_CLIENT_ID.contains(&client_id.chars().count()) {
+        println!("El client id ingresado es inválido");
+        return Err(INVALID_CLIENT_ID_ERROR_MSG.into());
+    }
     Ok(())
 }
 
@@ -246,8 +266,8 @@ impl ConnectFlags {
             flags[2] = true; // Last will retain flag
         }
         if flags_byte & LAST_WILL_QOS_MSB_FLAG == LAST_WILL_QOS_MSB_FLAG {
-            return Err("4th msb of Connect flags is 1, and should be 0 (Quality of Service can be 1 o 0 only)".into());
-        }
+            return Err(QOF_2_REQUESTED_ERROR_MSG.into());
+        }   
         if flags_byte & LAST_WILL_QOS_LSB_FLAG == LAST_WILL_QOS_LSB_FLAG {
             flags[4] = true; // Last will qos flag
         }
@@ -258,8 +278,8 @@ impl ConnectFlags {
             flags[6] = true; // Clean session flag
         }
         if flags_byte & RESERVED_BIT == RESERVED_BIT {
-            return Err("Connect flags: Reserved bit should be 0".into());
-        }
+            return Err(RESERVED_BIT_SHOULD_BE_ZERO_ERROR_MSG.into()); // [MQTT-3.1.2-3].
+        }   
 
         Ok(ConnectFlags::new(
             flags[0], flags[1], flags[2], flags[4], flags[5], flags[6],
@@ -315,6 +335,7 @@ impl ConnectPayload {
         flags: &ConnectFlags,
     ) -> Result<ConnectPayload, Box<dyn std::error::Error>> {
         let client_id = decode_mqtt_string(stream)?;
+        verify_client_id(&client_id)?;
 
         let mut last_will_topic = None;
         let mut last_will_message = None;
@@ -382,21 +403,21 @@ mod tests {
         let byte: [u8; 1] = [0x5];
         let to_test = verify_protocol_level_byte(&byte);
 
-        assert_eq!(to_test, Err("Invalid protocol level byte".to_owned()));
+        assert_eq!(to_test, Err(INCORRECT_PROTOCOL_LEVEL_ERROR_MSG.to_owned()));
     }
 
     #[test]
     fn correct_mqtt_string_byte() {
         let bytes: [u8; 6] = [0x00, 0x04, 0x4D, 0x51, 0x54, 0x54];
-        let to_test = verify_mqtt_string_bytes(&bytes);
+        let to_test = verify_protocol_name_bytes(&bytes);
         assert_eq!(to_test, Ok(()));
     }
 
     #[test]
     fn error_mqtt_string_byte() {
         let bytes: [u8; 6] = [0x00, 0x05, 0x4D, 0x51, 0x54, 0x54];
-        let to_test = verify_mqtt_string_bytes(&bytes);
-        assert_eq!(to_test, Err("It's not MQTT".to_owned()));
+        let to_test = verify_protocol_name_bytes(&bytes);
+        assert_eq!(to_test, Err(INCORRECT_PROTOCOL_NAME_ERROR_MSG.to_owned()));
     }
 
     #[test]
@@ -410,14 +431,14 @@ mod tests {
     fn error_username_password_flags() {
         let flags = ConnectFlags::new(false, true, true, true, true, true);
         let to_test = verify_connect_flags(&flags);
-        assert_eq!(to_test, Err("Invalid Username and Password flags".into()));
+        assert_eq!(to_test, Err(INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG.into()));
     }
-
+    
     #[test]
     fn error_last_will_flags() {
         let flags = ConnectFlags::new(true, true, true, true, false, true);
         let to_test = verify_connect_flags(&flags);
-        assert_eq!(to_test, Err("Invalid last will flags".into()));
+        assert_eq!(to_test, Err(INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG.into()));
     }
 
     #[test]
@@ -447,7 +468,7 @@ mod tests {
         );
 
         let to_test = verify_payload(&flags, &payload);
-        assert_eq!(to_test, Err("Invalid Payload".into()));
+        assert_eq!(to_test, Err(INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG.into()));
     }
     
     #[test]
@@ -501,6 +522,104 @@ mod tests {
         connect_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Connect::read_from(&mut buff, 0x10);
-        assert_eq!(to_test.unwrap_err().to_string(), "Invalid Username and Password flags");
+        assert_eq!(to_test.unwrap_err().to_string(), INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG);
     }
+
+    #[test]
+    fn invalid_chars_in_client_id() {
+        let connect_packet = Connect::new(
+            ConnectPayload::new(
+                "Cañuelas Álvaro".to_owned(),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+                Some("Pedrito".to_owned()),
+                Some("u".to_owned()),
+            ),
+            60,
+            true,
+            true,
+            true,
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        connect_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Connect::read_from(&mut buff, 0x10);
+        assert_eq!(to_test.unwrap_err().to_string(), INVALID_CLIENT_ID_ERROR_MSG);
+    }
+
+    #[test]
+    fn invalid_length_0_in_client_id() {
+        let connect_packet = Connect::new(
+            ConnectPayload::new(
+                "".to_owned(),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+                Some("Pedrito".to_owned()),
+                Some("u".to_owned()),
+            ),
+            60,
+            true,
+            true,
+            true,
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        connect_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Connect::read_from(&mut buff, 0x10);
+        assert_eq!(to_test.unwrap_err().to_string(), INVALID_CLIENT_ID_ERROR_MSG);
+    }
+
+    #[test]
+    fn invalid_length_24_in_client_id() {
+        let connect_packet = Connect::new(
+            ConnectPayload::new(
+                "aaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+                Some("Pedrito".to_owned()),
+                Some("u".to_owned()),
+            ),
+            60,
+            true,
+            true,
+            true,
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        connect_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Connect::read_from(&mut buff, 0x10);
+        assert_eq!(to_test.unwrap_err().to_string(), INVALID_CLIENT_ID_ERROR_MSG);
+    }
+
+    #[test]
+    fn valid_client_id() {
+        let connect_packet = Connect::new(
+            ConnectPayload::new(
+                "Pedro".to_owned(),
+                Some("u".to_owned()),
+                Some("u".to_owned()),
+                Some("Pedrito".to_owned()),
+                Some("u".to_owned()),
+            ),
+            60,
+            true,
+            true,
+            true,
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        connect_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Connect::read_from(&mut buff, 0x10).unwrap();
+        if let Packet::Connect(to_test) = to_test {
+            assert_eq!(to_test.connect_payload.client_id, "Pedro");    
+        } else {
+            assert!(false);
+        }
+        
+    }
+    
 }

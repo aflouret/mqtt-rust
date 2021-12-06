@@ -9,7 +9,7 @@ pub const SUCCESS_MAX_QOS_1: u8 = 0x01;
 pub const FAILURE: u8 = 0x80;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SubackReturnCode {
     SuccessAtMostOnce = SUCCESS_MAX_QOS_0,
     SuccessAtLeastOnce = SUCCESS_MAX_QOS_1,
@@ -29,9 +29,9 @@ impl SubackReturnCode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Suback {
-    packet_id: u16,
+    pub packet_id: u16,
     pub return_codes: Vec<SubackReturnCode>,
 }
 

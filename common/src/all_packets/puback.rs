@@ -8,7 +8,7 @@ const PUBACK_REMAINING_LENGTH: u32 = 2;
 
 #[derive(Debug)]
 pub struct Puback {
-    packet_id: u16,
+    pub packet_id: u16,
 }
 
 impl Puback {

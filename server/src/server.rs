@@ -28,9 +28,9 @@ impl Server {
         println!("Servidor escuchando en: {} ", &address);
         self.logger.log_msg(LogMessage::new("Servidor escuchando:".to_string(), "8080".to_string()));
         let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>::new()));
-        let (c_h_reader_tx, server_rx) = mpsc::channel::<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>();
+        let (c_h_reader_tx, packet_proc_rx) = mpsc::channel::<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>();
 
-        let packet_processor = PacketProcessor::new(server_rx, senders_to_c_h_writers.clone(), self.logger.clone());
+        let packet_processor = PacketProcessor::new(packet_proc_rx, senders_to_c_h_writers.clone(), self.logger.clone());
         let packet_processor_join_handle = packet_processor.run();
 
         self.handle_connections(listener, senders_to_c_h_writers, c_h_reader_tx);
