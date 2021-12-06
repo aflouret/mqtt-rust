@@ -12,10 +12,11 @@ use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use common::logging::logger::{Logger, LogMessage};
-use common::all_packets::suback::{Suback, SubackReturnCode};
+use common::all_packets::suback::{Suback, SubackReturnCode, SUCCESS_MAX_QOS_0};
+use common::all_packets::suback::SubackReturnCode::SuccessAtMostOnce;
+use common::all_packets::subscribe::Subscribe;
 use common::all_packets::pingreq::Pingreq;
 use common::all_packets::pingresp::Pingresp;
-use common::all_packets::subscribe::Subscribe;
 
 pub struct Message {
     pub message: String,
@@ -48,7 +49,7 @@ impl PacketProcessor {
         let join_handle = thread::spawn(move || {
             loop {
                 if let Ok((c_h_id, packet)) = self.rx.recv() {
-                    
+
                     match packet {
                         Ok(packet) => {
                             if let Err(_) = self.process_packet(packet, c_h_id) {
@@ -70,15 +71,15 @@ impl PacketProcessor {
 
     pub fn handle_disconnect_error(&mut self, c_h_id: u32) {
         // La session que tenía dicho c_h_id y era clean, debe eliminarse
-        self.clients.retain(|_, session| 
+        self.clients.retain(|_, session|
             ! (session.get_client_handler_id() == Some(c_h_id) && session.is_clean_session));
-        
+
         // Si es que no era clean, la desconectamos del c_h_id para que la próxima vez que se conecte
         // el mismo cliente, se use el c_h_id del nuevo c_h
         self.clients.iter_mut()
             .filter(|(_, session)| session.get_client_handler_id() == Some(c_h_id))
             .for_each(|(_,session)| session.disconnect());
-        
+
         // Eliminamos el sender al c_h del hash ya que se va a dropear ese c_h
         let mut senders_hash = self.senders_to_c_h_writers.write().unwrap();
         if let Some(sender) = senders_hash.remove(&c_h_id){
@@ -120,7 +121,7 @@ impl PacketProcessor {
 
                 _ => { return Err("Invalid packet".into()) },
             };
-        
+
         if let Some(response_packet) = response_packet{
             let senders_hash = self.senders_to_c_h_writers.read().unwrap();
             let sender = senders_hash.get(&c_h_id).unwrap();
@@ -173,7 +174,7 @@ impl PacketProcessor {
 
     pub fn handle_unsubscribe_packet(&mut self, unsubscribe_packet: Unsubscribe, c_h_id: u32) -> Result<Unsuback, Box<dyn std::error::Error>> {
         println!("Se recibió el subscribe packet");
-    
+
         let unsuback_packet = Unsuback::new(unsubscribe_packet.packet_id);
         for subscription in unsubscribe_packet.topics {
             for (_, session) in &mut self.clients {
@@ -182,17 +183,17 @@ impl PacketProcessor {
                         session.remove_subscription(subscription);
                         break;
                     }
-                } 
+                }
             }
         }
-        
+
         Ok(unsuback_packet)
-        
+
     }
 
     pub fn handle_subscribe_packet(&mut self, subscribe_packet: Subscribe, c_h_id: u32) -> Result<Suback, Box<dyn std::error::Error>> {
         println!("Se recibió el subscribe packet");
-    
+
 
 
         let mut suback_packet = Suback::new(subscribe_packet.packet_id);
@@ -200,7 +201,7 @@ impl PacketProcessor {
             for (_, session) in &mut self.clients {
                 if let Some(client_handler_id)  = session.get_client_handler_id() {
                     if client_handler_id == c_h_id {
-                        /*if subscription_is_valid() true == false {
+                        if /*subscription_is_valid()*/true == false {
                             let return_code = SubackReturnCode::Failure;
                             suback_packet.add_return_code(return_code);
                         } else {
@@ -211,52 +212,55 @@ impl PacketProcessor {
                             session.add_subscription(subscription.clone());
                             suback_packet.add_return_code(return_code)
                         }
-                        */
-
+                        
                         //Retain Logic Subscribe
                         if self.retained_messages.contains_key(&subscription.topic_filter) {
+                            println!("Entro retained mgss");
                             if let Some(message) = self.retained_messages.get(&subscription.topic_filter) {
                                 //Send publish al cliente con el mensaje en el retained_messages
                                 let publish_packet = Publish::new(
                                     PublishFlags::new(0b0011_0011),
                                     subscription.topic_filter,
-                                    None, 
+                                    None,
                                     message.message.clone(),
                                 );
-                                
+
                                 let senders_hash = self.senders_to_c_h_writers.read().unwrap();
                                 let sender = senders_hash.get(&client_handler_id).unwrap();
                                 let sender_mutex_guard = sender.lock().unwrap();
+                                println!("Publish a mandar: {:?}",&publish_packet);
                                 sender_mutex_guard.send(Ok(Packet::Publish(publish_packet))).unwrap();
                             }
                         };
 
                         break;
                     }
-                } 
+                }
             }
         }
-        
+        //suback_packet.add_return_code(SuccessAtMostOnce);///HARDCODED
         Ok(suback_packet)
-        
+
     }
-    
+
     pub fn handle_publish_packet(&mut self, publish_packet: Publish, c_h_id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
         println!("Se recibió el publish packet");
         //Sacamos el packet_id del pubblish
         //Sacar info del publish
         //Mandamos el puback al client.
-        
-        let packet_id = 1 as u16;
-        let puback_packet_response = Puback::new(packet_id);
-        let current_session = self.clients.get_mut("u").unwrap(); //TODO: sacar unwrap
+
+        //let current_session = self.clients.get_mut("a").unwrap(); //TODO: sacar unwrap
         let topic_name = &publish_packet.topic_name;
 
         //Retain Logic Publish
+        //A PUBLISH Packet with a RETAIN flag set to 1 and a payload containing zero bytes will be processed as normal by the Server
+        //and sent to Clients with a subscription matching the topic name.
+        //Additionally any existing retained message with the same topic name MUST be removed and any future subscribers
+        //for the topic will not receive a retained message
         if publish_packet.flags.retain {
-            self.retained_messages.insert(topic_name.clone(), Message { 
-                message: publish_packet.application_message.clone(), 
-                qos: publish_packet.flags.qos_level 
+            self.retained_messages.insert(topic_name.clone(), Message {
+                message: publish_packet.application_message.clone(),
+                qos: publish_packet.flags.qos_level
             });
         }
 
@@ -272,12 +276,12 @@ impl PacketProcessor {
                 }
             }
         }
-        println!("Se envio correctamente el PUBACK");
 
         if publish_packet.flags.qos_level == Qos::AtMostOnce {
             Ok(None)
         } else {
+            println!("Se envio correctamente el PUBACK");
             Ok(Some(Puback::new(publish_packet.packet_id.unwrap())))
-        } 
+        }
     }
 }
