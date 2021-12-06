@@ -207,7 +207,7 @@ fn run_client03() -> JoinHandle<()> {
         let publish_packet_1 = Publish::new(
             PublishFlags::new(0b0011_0010),
             "topic_a".to_string(),
-            None,
+            Some(4),
             "hola".to_string(),
         );
 
