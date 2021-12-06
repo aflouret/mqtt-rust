@@ -276,7 +276,7 @@ impl PacketProcessor {
 
     fn handle_publish_packet_qos0(&mut self, publish_packet: Publish, c_h_id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
         let publish_send = Publish::new(
-            PublishFlags::new(0b0000_0000),
+            PublishFlags::new(0b0011_0000),
             publish_packet.topic_name.clone(),
             publish_packet.packet_id,
             publish_packet.application_message.clone(),
@@ -296,36 +296,45 @@ impl PacketProcessor {
         let packet_id = publish_packet.packet_id;
 
         let publish_send = Publish::new(
-            PublishFlags::new(0b0000_0010),
+            PublishFlags::new(0b0011_0010),
             publish_packet.topic_name.clone(),
             packet_id,
             publish_packet.application_message.clone(),
         );    
         
-        self.send_packet_to_client_handler(c_h_id, Ok(Packet::Publish(publish_send.clone())));
+        for (_, session) in &self.clients {
+            if session.is_subscribed_to(&publish_packet.topic_name) {
+                if let Some(client_handler_id) = session.get_client_handler_id() {
+                    self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
 
-        let senders_clone = self.senders_to_c_h_writers.clone();
-        let (tx, rx) = mpsc::channel();
-        self.qos_1_senders.insert(publish_packet.packet_id.unwrap(), tx);
+                    let senders_clone = self.senders_to_c_h_writers.clone();
+                    let (tx, rx) = mpsc::channel();
+                    self.qos_1_senders.insert(packet_id.unwrap(), tx);
 
-        thread::spawn(move || {
-            loop {
-                if let Err(_) = rx.recv_timeout(Duration::from_millis(1000)) {
-                    let publish_send = Publish::new(
-                        PublishFlags::new(0b0000_1010),
-                        publish_packet.topic_name.clone(),
-                        packet_id,
-                        publish_packet.application_message.clone(),
-                    );    
-                    let senders_hash = senders_clone.read().unwrap();
-                    let sender = senders_hash.get(&c_h_id).unwrap();
-                    let sender_mutex_guard = sender.lock().unwrap();
-                    sender_mutex_guard.send(Ok(Packet::Publish(publish_send.clone()))).unwrap();
-                } else {
-                    break;
+                    let publish_packet = publish_packet.clone();
+                    thread::spawn(move || {
+                        loop {
+                            if let Err(_) = rx.recv_timeout(Duration::from_millis(1000)) {
+                                println!("Resend");
+                                let publish_send = Publish::new(
+                                    PublishFlags::new(0b0011_1010),
+                                    publish_packet.topic_name.clone(),
+                                    Some(35),
+                                    publish_packet.application_message.clone(),
+                                );    
+                                let senders_hash = senders_clone.read().unwrap();
+                                let sender = senders_hash.get(&client_handler_id).unwrap();
+                                let sender_mutex_guard = sender.lock().unwrap();
+                                sender_mutex_guard.send(Ok(Packet::Publish(publish_send.clone()))).unwrap();
+                            } else {
+                                break;
+                            }
+                        }
+                    });
                 }
             }
-        });
+        }
+        
         println!("Se envio correctamente el PUBACK");
         return Ok(Some(Puback::new(packet_id.unwrap())));
     }

@@ -15,7 +15,7 @@ use std::io::{Read, Write, Error, ErrorKind::Other};
 const PACKET_TYPE_BYTE: u8 = 0xF0;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Qos {
     AtMostOnce = 0,
     AtLeastOnce = 1,
