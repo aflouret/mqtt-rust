@@ -5,7 +5,7 @@ mod client;
 mod client_controller;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = Client::new("Pepito".to_owned(), "127.0.0.1:8080".to_owned())?;
+    let mut client = Client::new("u;".to_owned(), "127.0.0.1:8080".to_owned())?;
 
     let connect_packet = Connect::new(
         ConnectPayload::new(

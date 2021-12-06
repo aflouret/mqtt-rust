@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::{Read, ErrorKind}};
 
 const MAX_MQTT_STRING_BYTES: u16 = 65535;
 
@@ -61,6 +61,7 @@ pub fn encode_mqtt_string(string: &str) -> Result<Vec<u8>, String> {
     Ok(vec)
 }
 
+//Result<String, Box<dyn std::error::Error>>
 pub fn decode_mqtt_string(stream: &mut dyn Read) -> Result<String, std::io::Error> {
     let mut bytes = [0u8; 2];
     stream.read_exact(&mut bytes)?;
@@ -68,9 +69,12 @@ pub fn decode_mqtt_string(stream: &mut dyn Read) -> Result<String, std::io::Erro
 
     let mut bytes_2 = vec![0; number as usize];
     stream.read_exact(&mut bytes_2)?;
-    let payload = String::from_utf8(bytes_2).unwrap();
-
-    Ok(payload)
+    let payload_ = String::from_utf8(bytes_2);
+    if let Ok(payload) = payload_ {
+        return Ok(payload);
+    } else {
+        return Err(std::io::Error::new(ErrorKind::Other, "La cadena no es UTF-8"));
+    }
 }
 
 /* ----------------------------- Unit tests -----------------------------*/
