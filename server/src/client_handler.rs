@@ -7,6 +7,7 @@ use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use std::collections::HashMap;
+use std::time::Duration;
 
 const SOCKET_DISCONNECT_ERROR_MSG: &str = "Disconnectiong Socket due to Error";
 
@@ -119,6 +120,7 @@ impl ClientHandlerReader {
                 sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>, 
                 reader_to_writer_tx: Sender<Result<Packet, Box<dyn std::error::Error + Send>>>) 
                     -> ClientHandlerReader {
+        socket.set_read_timeout(Some(Duration::new(5,0))).unwrap();
         ClientHandlerReader {
             id,
             socket,
@@ -132,10 +134,17 @@ impl ClientHandlerReader {
         match Packet::read_from(&mut self.socket) {
             Ok(packet) => {
                 // [MQTT-3.1.0-2]: Si es un Connect y ya había recibido un Connect antes, es un PROTOCOL VIOLATION: desconecto al client
-                if let Packet::Connect(_connect) = &packet {
+                if let Packet::Connect(connect) = &packet {
                     if self.already_connected {
                         println!("PROTOCOL VIOLATION: Connect packet received twice");
                         return Err(Box::new(SendError("PROTOCOL VIOLATION: Connect packet received twice")));
+                    }
+
+                    //If the Keep Alive value is non-zero and the Server does not receive a Control Packet from the Client
+                    //within one and a half times the Keep Alive time period, it MUST disconnect the Network Connection to the Client as if the network had failed
+                    let keep_alive = connect.keep_alive_seconds as u64;
+                    if keep_alive != 0 {
+                        self.socket.set_read_timeout(Some(Duration::new(3*keep_alive/2, 0))).unwrap();
                     }
                 }
                 if let Err(error) = self.sender.send((self.id, Ok(packet))) {
