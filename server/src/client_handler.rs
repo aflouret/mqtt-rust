@@ -143,8 +143,9 @@ impl ClientHandlerReader {
                     //If the Keep Alive value is non-zero and the Server does not receive a Control Packet from the Client
                     //within one and a half times the Keep Alive time period, it MUST disconnect the Network Connection to the Client as if the network had failed
                     let keep_alive = connect.keep_alive_seconds as u64;
-                    if keep_alive != 0 {
-                        self.socket.set_read_timeout(Some(Duration::new(3*keep_alive/2, 0))).unwrap();
+                    match keep_alive {
+                        0 => self.socket.set_read_timeout(None).unwrap(),
+                        _ => self.socket.set_read_timeout(Some(Duration::new(3*keep_alive/2, 0))).unwrap(),
                     }
                 }
                 if let Err(error) = self.sender.send((self.id, Ok(packet))) {
