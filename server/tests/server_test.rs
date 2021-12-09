@@ -41,8 +41,8 @@ fn test02() {
     let client_handle2 = run_client02();
     let client_handle3 = run_client03();
     
-    client_handle2.join().unwrap();
     client_handle3.join().unwrap();
+    client_handle2.join().unwrap();
 
 }
 

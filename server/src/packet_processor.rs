@@ -1,5 +1,6 @@
 use crate::session::Session;
 use crate::topic_filters;
+use crate::puback_processor::PubackProcessor;
 use common::all_packets::connack::Connack;
 use common::all_packets::connect::Connect;
 use common::all_packets::unsuback::Unsuback;
@@ -28,29 +29,46 @@ pub struct Message {
 pub struct PacketProcessor {
     clients: HashMap<String, Session>,
     rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
+    tx_to_puback_processor: Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
+    rx_from_packet_processor: Option<Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>>,
     senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
     logger: Arc<Logger>,
     retained_messages: HashMap<String, Message>,
-    qos_1_senders: HashMap<u16, Sender<()>>,
+    //qos_1_senders: HashMap<u16, Sender<()>>,
 }
 
 impl PacketProcessor {
 
-    pub fn new(rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
-               senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
-               logger: Arc<Logger>) -> PacketProcessor {
-        PacketProcessor {
+    pub fn new(
+        rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
+        senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
+        logger: Arc<Logger>) -> PacketProcessor {
+        
+            let (tx_to_puback_processor, rx_from_packet_processor) = mpsc::channel(); 
+
+            PacketProcessor {
             clients: HashMap::<String, Session>::new(),
             rx,
+            tx_to_puback_processor,
+            rx_from_packet_processor: Some(rx_from_packet_processor),
             senders_to_c_h_writers,
             logger,
             retained_messages: HashMap::<String, Message>::new(),
-            qos_1_senders: HashMap::<u16, Sender<()>>::new(),
+            //qos_1_senders: HashMap::<u16, Sender<()>>::new(),
         }
     }
 
     pub fn run(mut self) -> JoinHandle<()> {
+        
         let join_handle = thread::spawn(move || {
+            let senders_to_c_h_writers = self.senders_to_c_h_writers.clone();
+            let rx_from_packet_processor = self.rx_from_packet_processor.take().unwrap();
+            let puback_proc_handle = thread::spawn(move || {
+                let puback_processor = PubackProcessor::new(senders_to_c_h_writers, rx_from_packet_processor);
+                puback_processor.run();
+            });
+
+
             loop {
                 if let Ok((c_h_id, packet)) = self.rx.recv() {
 
@@ -69,6 +87,8 @@ impl PacketProcessor {
                     break;
                 }  
             }
+
+            puback_proc_handle.join().unwrap();
         });
         join_handle
     } 
@@ -300,40 +320,50 @@ impl PacketProcessor {
             publish_packet.topic_name.clone(),
             packet_id,
             publish_packet.application_message.clone(),
-        );    
-        
+        );
+                
         for (_, session) in &self.clients {
             if session.is_subscribed_to(&publish_packet.topic_name) {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
                     self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
-
-                    let senders_clone = self.senders_to_c_h_writers.clone();
-                    let (tx, rx) = mpsc::channel();
-                    self.qos_1_senders.insert(packet_id.unwrap(), tx);
-
-                    let publish_packet = publish_packet.clone();
-                    thread::spawn(move || {
-                        loop {
-                            if let Err(_) = rx.recv_timeout(Duration::from_millis(1000)) {
-                                println!("Resend");
-                                let publish_send = Publish::new(
-                                    PublishFlags::new(0b0011_1010),
-                                    publish_packet.topic_name.clone(),
-                                    Some(35),
-                                    publish_packet.application_message.clone(),
-                                );    
-                                let senders_hash = senders_clone.read().unwrap();
-                                let sender = senders_hash.get(&client_handler_id).unwrap();
-                                let sender_mutex_guard = sender.lock().unwrap();
-                                sender_mutex_guard.send(Ok(Packet::Publish(publish_send.clone()))).unwrap();
-                            } else {
-                                break;
-                            }
-                        }
-                    });
+                    self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send.clone())))).unwrap();
                 }
             }
         }
+
+
+        // for (_, session) in &self.clients {
+        //     if session.is_subscribed_to(&publish_packet.topic_name) {
+        //         if let Some(client_handler_id) = session.get_client_handler_id() {
+        //             self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
+
+        //             let senders_clone = self.senders_to_c_h_writers.clone();
+        //             let (tx, rx) = mpsc::channel();
+        //             self.qos_1_senders.insert(packet_id.unwrap(), tx);
+
+        //             let publish_packet = publish_packet.clone();
+        //             thread::spawn(move || {
+        //                 loop {
+        //                     if let Err(_) = rx.recv_timeout(Duration::from_millis(1000)) {
+        //                         println!("Resend");
+        //                         let publish_send = Publish::new(
+        //                             PublishFlags::new(0b0011_1010),
+        //                             publish_packet.topic_name.clone(),
+        //                             Some(35),
+        //                             publish_packet.application_message.clone(),
+        //                         );    
+        //                         let senders_hash = senders_clone.read().unwrap();
+        //                         let sender = senders_hash.get(&client_handler_id).unwrap();
+        //                         let sender_mutex_guard = sender.lock().unwrap();
+        //                         sender_mutex_guard.send(Ok(Packet::Publish(publish_send.clone()))).unwrap();
+        //                     } else {
+        //                         break;
+        //                     }
+        //                 }
+        //             });
+        //         }
+        //     }
+        // }
         
         println!("Se envio correctamente el PUBACK");
         return Ok(Some(Puback::new(packet_id.unwrap())));
@@ -341,11 +371,14 @@ impl PacketProcessor {
 
     pub fn handle_puback_packet(&mut self, puback_packet: Puback, c_h_id: u32) -> Result<(), Box<dyn std::error::Error>> {
         
-        if let Some(sender) = self.qos_1_senders.get_mut(&puback_packet.packet_id) {
-            sender.send(()).unwrap();
-            return Ok(());
-        }
-        Err("packet not found".into())
+        self.tx_to_puback_processor.send((0, Ok(Packet::Puback(puback_packet))))?;
+
+        // if let Some(sender) = self.qos_1_senders.get_mut(&puback_packet.packet_id) {
+        //     sender.send(()).unwrap();
+        //     return Ok(());
+        // }
+        // Err("packet not found".into())
+        Ok(())
     }
 
     fn get_client_id_from_handler_id(&self, c_h_id: u32) -> Option<String> {
