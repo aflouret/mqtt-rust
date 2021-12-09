@@ -102,8 +102,9 @@ impl ReadPacket for Publish {
             _ => None
         };
 
+
         let application_message = decode_mqtt_string(&mut remaining_bytes)?;
-        
+        println!("PUBLISH PACKET OK");
         println!("Publish packet leido correctamente");
 
         Ok(Packet::Publish(Publish::new(

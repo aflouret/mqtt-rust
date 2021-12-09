@@ -1,6 +1,7 @@
 use std::{io, thread};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender, SendError};
+use std::time::Duration;
 use crate::client::Client;
 
 extern crate glib;
@@ -12,16 +13,16 @@ use gtk::prelude::*;
 use common::all_packets::connect::{Connect, ConnectPayload};
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::subscribe::{Subscribe};
+use common::all_packets::unsubscribe::{Unsubscribe};
 use common::packet::{Packet, Qos, Subscription};
 use crate::handlers::EventHandlers;
 use crate::handlers::HandleConection;
 use crate::handlers::HandlePublish;
 use crate::handlers::HandleSubscribe;
+use crate::handlers::HandleUnsubscribe;
 
 mod client;
-mod client_controller;
 mod handlers;
-mod client_processor;
 mod response;
 
 // -> Result<(), Box<dyn std::error::Error>>
@@ -36,7 +37,7 @@ fn main() {
         let (sender_conection, recv_conection) = mpsc::channel::<EventHandlers>();
         let (client_sender, window_recv) = mpsc::channel::<String>();
         let handler_to_client = thread::spawn(move || {
-            let mut client = Client::new("User".to_owned(), "127.0.0.1:8080");
+            let mut client = Client::new("User".to_owned());
             client.start_client(recv_conection, client_sender);
         });
         let builder = build_ui(app);
@@ -50,6 +51,8 @@ fn main() {
 fn build_ui(app: &gtk::Application) -> gtk::Builder {
     let glade_src = include_str!("interface.glade");
     let mut builder = gtk::Builder::from_string(glade_src);
+    let response_publish: gtk::Label = builder.object("response_publish").unwrap();
+    response_publish.set_text("");
     let window: gtk::Window = builder.object("main_window").unwrap();
     window.set_application(Some(app));
     window.show_all();
@@ -59,19 +62,23 @@ fn build_ui(app: &gtk::Application) -> gtk::Builder {
 fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv: Receiver<String>) {
     handle_connect_tab(builder.clone(), sender_conec.clone());
     handle_publish_tab(builder.clone(), sender_conec.clone());
-    handle_subscribe_tab(builder.clone(), sender_conec);
+    handle_subscribe_tab(builder.clone(), sender_conec.clone());
+    handle_unsubscribe(builder.clone(), sender_conec);
     // main_window.handle_publish_tab(sender);
-   let (intern_sender, intern_recv) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+    let (intern_sender, intern_recv) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
     thread::spawn(move || {
         let response = window_recv.recv().unwrap();
         println!("RESPONSE: {:?}", &response);
         intern_sender.send(response);
     });
-    let topic_publish_label: gtk::Label = builder.object("topic_publish_label").unwrap();
 
+    let response_publish: gtk::Label = builder.object("response_publish").unwrap();
+    let buffer: gtk::TextBuffer = builder.object("textbuffer1").unwrap();
     intern_recv.attach(None, move |text: String| {
-        topic_publish_label.set_text(text.as_str());
+        println!("Recibo para poner en display: {:?}",&text.as_str());
+        buffer.set_text(text.as_str());
+        //response_publish.set_text(text.as_str());
         glib::Continue(true)
     });
 }
@@ -85,6 +92,7 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let password_entry: gtk::Entry = builder.object("pass_entry").unwrap();
     let last_will_msg_entry: gtk::Entry = builder.object("lastWillMsg_entry").unwrap();
     let last_will_topic_entry: gtk::Entry = builder.object("lastWillTopic_entry").unwrap();
+    //let mut keep_alive_entry: gtk::Entry = builder.object("keep_alive_entry").unwrap();
     connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
         let connect_packet = Connect::new( ConnectPayload::new((&client_id_entry.text()).to_string(),
                                 Some((&last_will_topic_entry.text()).to_string()),
@@ -92,7 +100,7 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
                                 Some((&username_entry.text()).to_string()),
                                 Some((&password_entry.text()).to_string()),
             ),
-            60,
+            90,
             true,
             true,
             true,
@@ -125,7 +133,7 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         let r = retain_checkbox.is_active();
         println!("{:?}", &r);
         let publish_packet = Publish::new(
-            PublishFlags::new(0b0100_1011),
+            PublishFlags::new(0b0100_0000),
             (&topic_pub_entry.text()).to_string(),
             Some(10),
             (&app_msg_entry.text()).to_string(),
@@ -140,11 +148,10 @@ fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let topic_subscribe_entry: gtk::Entry = builder.object("topic_suscribe_entry").unwrap();
     let text_view: gtk::TextView = builder.object("text_view").unwrap();
     let buffer: gtk::TextBuffer = builder.object("textbuffer1").unwrap();
-/*    buffer.set_text("Probando");
-    text_view.buffer().unwrap();*/
-/*    text_view.set_tooltip_text(Some("Probando"));*/
+    /*    buffer.set_text("Probando");
+        text_view.buffer().unwrap();*/
+    /*    text_view.set_tooltip_text(Some("Probando"));*/
     subscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
-        buffer.set_text("Probando");
         //text_view.buffer().unwrap();
         let mut subscribe_packet = Subscribe::new(10);
         subscribe_packet.add_subscription(Subscription{topic_filter: (&topic_subscribe_entry.text()).to_string(), max_qos: Qos::AtLeastOnce});
@@ -152,6 +159,20 @@ fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(subscribe_packet));
         sender.send(event_subscribe);
     }));
+}
+
+fn handle_unsubscribe(builder: gtk::Builder, sender: Sender<EventHandlers>) {
+    let unsubscribe_button: gtk::Button = builder.object("unsubscribe_button").unwrap();
+    let unsubscribe_topic_entry: gtk::Entry = builder.object("topic_unsubscribe_entry").unwrap();
+
+    unsubscribe_button.connect_clicked(clone!( @weak unsubscribe_topic_entry => move |_| {
+        let mut unsubs_packet = Unsubscribe::new(10);
+        unsubs_packet.add_topic((&unsubscribe_topic_entry.text()).to_string());
+
+        let event_unsubscribe = EventHandlers::HandleUnsubscribe(HandleUnsubscribe::new(unsubs_packet));
+        sender.send(event_unsubscribe);
+    }));
+
 }
 
 struct MainWindow {

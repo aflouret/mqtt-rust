@@ -165,7 +165,7 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkEntry">
+                          <object class="GtkEntry" id="keep_alive_entry">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="margin_top">2</property>
@@ -565,6 +565,10 @@
                 <property name="halign">center</property>
                 <property name="valign">center</property>
                 <property name="label" translatable="yes">Publish sent succesfully</property>
+                <attributes>
+                <attribute name="font-desc" value="Sans Bold Italic 10"/>
+                <attribute name="foreground" value="#34eb37"/>
+                </attributes>
               </object>
               <packing>
                 <property name="expand">False</property>
