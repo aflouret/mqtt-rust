@@ -15,3 +15,4 @@ Cargo.lock
 
 /common/target
 /common/Cargo.lock
+server/logfile.txt

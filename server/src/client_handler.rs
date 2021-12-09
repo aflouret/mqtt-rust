@@ -144,7 +144,7 @@ impl ClientHandlerReader {
                     //within one and a half times the Keep Alive time period, it MUST disconnect the Network Connection to the Client as if the network had failed
                     let mut keep_alive = connect.keep_alive_seconds as u64;
                     if keep_alive != 0 {
-                        keep_alive = 3 / 2 * keep_alive;
+                        keep_alive *= 2;
                         self.socket.set_read_timeout(Some(Duration::new(keep_alive, 0))).unwrap();
                     } else {
                         self.socket.set_read_timeout(None).unwrap();

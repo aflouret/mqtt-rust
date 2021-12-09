@@ -22,9 +22,7 @@ use crate::handlers::HandleSubscribe;
 use crate::handlers::HandleUnsubscribe;
 
 mod client;
-mod client_controller;
 mod handlers;
-mod client_processor;
 mod response;
 
 // -> Result<(), Box<dyn std::error::Error>>
@@ -39,7 +37,7 @@ fn main() {
         let (sender_conection, recv_conection) = mpsc::channel::<EventHandlers>();
         let (client_sender, window_recv) = mpsc::channel::<String>();
         let handler_to_client = thread::spawn(move || {
-            let mut client = Client::new("User".to_owned(), "127.0.0.1:8080");
+            let mut client = Client::new("User".to_owned());
             client.start_client(recv_conection, client_sender);
         });
         let builder = build_ui(app);
@@ -73,11 +71,8 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
         let response = window_recv.recv().unwrap();
         println!("RESPONSE: {:?}", &response);
         intern_sender.send(response);
-/*        thread::sleep(Duration::from_secs(3));
-        intern_sender.send("".to_string());*/
-
-        //intern_sender.send(response);
     });
+
     let response_publish: gtk::Label = builder.object("response_publish").unwrap();
     let buffer: gtk::TextBuffer = builder.object("textbuffer1").unwrap();
     intern_recv.attach(None, move |text: String| {
@@ -97,6 +92,7 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let password_entry: gtk::Entry = builder.object("pass_entry").unwrap();
     let last_will_msg_entry: gtk::Entry = builder.object("lastWillMsg_entry").unwrap();
     let last_will_topic_entry: gtk::Entry = builder.object("lastWillTopic_entry").unwrap();
+    //let mut keep_alive_entry: gtk::Entry = builder.object("keep_alive_entry").unwrap();
     connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
         let connect_packet = Connect::new( ConnectPayload::new((&client_id_entry.text()).to_string(),
                                 Some((&last_will_topic_entry.text()).to_string()),
@@ -104,7 +100,7 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
                                 Some((&username_entry.text()).to_string()),
                                 Some((&password_entry.text()).to_string()),
             ),
-            60,
+            90,
             true,
             true,
             true,
@@ -137,7 +133,7 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         let r = retain_checkbox.is_active();
         println!("{:?}", &r);
         let publish_packet = Publish::new(
-            PublishFlags::new(0b0100_1011),
+            PublishFlags::new(0b0100_0000),
             (&topic_pub_entry.text()).to_string(),
             Some(10),
             (&app_msg_entry.text()).to_string(),
