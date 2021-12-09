@@ -74,7 +74,8 @@ impl PubackProcessor {
             .map(|(_,id,publish_packet)| (id, publish_packet))
             .collect();
 
-        for (id, packet) in to_send {
+        for (id, mut packet) in to_send {
+            packet.flags.duplicate = true;
             self.send_packet(id, packet);
         }
     }

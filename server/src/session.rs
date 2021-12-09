@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::net::TcpStream;
 use common::all_packets::connect::Connect;
+use common::all_packets::publish::Publish;
 use common::packet::{Packet, Subscription, Qos};
 use crate::topic_filters;
 
@@ -9,9 +10,8 @@ use crate::topic_filters;
 pub struct Session {
     client_handler_id: Option<u32>,
     client_data: ClientData,
-    client_packets: Vec<Packet>,
     client_subscriptions: Vec<Subscription>,
-    not_fully_transmitted_messages: Vec<NotFullyTransmittedMessages>,
+    pub unacknowledged_messages: Vec<Publish>,
     pub is_clean_session: bool
 }
 
@@ -22,9 +22,8 @@ impl Session {
         Ok(Session {
             client_handler_id: Some(client_handler_id),
             client_data,
-            client_packets: vec![],
             client_subscriptions: vec![],
-            not_fully_transmitted_messages: vec![],
+            unacknowledged_messages: vec![],
             is_clean_session: packet_connect.clean_session
         })
     }
@@ -49,13 +48,13 @@ impl Session {
         self.client_handler_id = None;
     }
 
-    pub fn is_subscribed_to(&self, topic_name: &String) -> bool {
+    pub fn is_subscribed_to(&self, topic_name: &String) -> Option<Qos> {
         for subscription in &self.client_subscriptions {
             if topic_filters::filter_matches_topic(&subscription.topic_filter, topic_name) {
-                return true;
+                return Some(subscription.max_qos);
             }
         }
-        return false;
+        return None;
     }  
     
     pub fn add_subscription(&mut self, mut subscription: Subscription) {
@@ -69,6 +68,10 @@ impl Session {
 
     pub fn remove_subscription(&mut self, topic_filter: String) {
         self.client_subscriptions.retain(|s| s.topic_filter != topic_filter);
+    }
+
+    pub fn store_publish_packet(&mut self, publish_packet: Publish) {
+        self.unacknowledged_messages.push(publish_packet);
     }
 }
 
@@ -89,12 +92,12 @@ pub struct ClientData{
 /* ---------------------------------------------------------- */
 
 
-pub enum NotFullyTransmittedMessages {
-    // QoS1 messages sent to the Client, but not been completely acknowledged
-    SentButNotAcknowledged(ApplicationMessage),
-    // QoS1 messages pending transmission to the Client
-    NotSent(ApplicationMessage),
-    // Optional: QoS0 messages pending transmission to the Client
-}
+// pub enum NotFullyTransmittedMessages {
+//     // QoS1 messages sent to the Client, but not been completely acknowledged
+//     SentButNotAcknowledged(ApplicationMessage),
+//     // QoS1 messages pending transmission to the Client
+//     NotSent(ApplicationMessage),
+//     // Optional: QoS0 messages pending transmission to the Client
+// }
 
 pub struct ApplicationMessage;

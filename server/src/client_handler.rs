@@ -94,7 +94,7 @@ impl ClientHandlerWriter {
     pub fn send_packet(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(packet) = self.receiver.recv()? {
             //if let Ok(packet) = packet {
-            packet.write_to(&mut self.socket).unwrap();
+            packet.write_to(&mut self.socket)?;
             //}
             Ok(())
         } else {

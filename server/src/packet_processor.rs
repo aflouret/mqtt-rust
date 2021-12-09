@@ -27,7 +27,7 @@ pub struct Message {
 }
 
 pub struct PacketProcessor {
-    clients: HashMap<String, Session>,
+    sessions: HashMap<String, Session>,
     rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
     tx_to_puback_processor: Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
     rx_from_packet_processor: Option<Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>>,
@@ -47,7 +47,7 @@ impl PacketProcessor {
             let (tx_to_puback_processor, rx_from_packet_processor) = mpsc::channel(); 
 
             PacketProcessor {
-            clients: HashMap::<String, Session>::new(),
+            sessions: HashMap::<String, Session>::new(),
             rx,
             tx_to_puback_processor,
             rx_from_packet_processor: Some(rx_from_packet_processor),
@@ -95,12 +95,12 @@ impl PacketProcessor {
 
     pub fn handle_disconnect_error(&mut self, c_h_id: u32) {
         // La session que tenía dicho c_h_id y era clean, debe eliminarse
-        self.clients.retain(|_, session|
+        self.sessions.retain(|_, session|
             ! (session.get_client_handler_id() == Some(c_h_id) && session.is_clean_session));
 
         // Si es que no era clean, la desconectamos del c_h_id para que la próxima vez que se conecte
         // el mismo cliente, se use el c_h_id del nuevo c_h
-        self.clients.iter_mut()
+        self.sessions.iter_mut()
             .filter(|(_, session)| session.get_client_handler_id() == Some(c_h_id))
             .for_each(|(_,session)| session.disconnect());
 
@@ -123,13 +123,19 @@ impl PacketProcessor {
 
                 Packet::Publish(publish_packet) => {
                     self.logger.log_msg(LogMessage::new("Publish Packet received from:".to_string(),c_h_id.to_string()))?;
-                    let puback_packet = self.handle_publish_packet(publish_packet, c_h_id)?;
+                    let puback_packet = self.handle_publish_packet(publish_packet)?;
                     if let Some(puback_packet) = puback_packet {
                         Some(Ok(Packet::Puback(puback_packet)))
                     } else {
                         None
                     }
                 },
+
+                Packet::Puback(puback_packet) => {
+                    self.logger.log_msg(LogMessage::new("Puback Packet received from:".to_string(),c_h_id.to_string()))?;
+                    self.handle_puback_packet(puback_packet)?;
+                    None
+                }
 
                 Packet::Subscribe(subscribe_packet) => {
                     self.logger.log_msg(LogMessage::new("Subscribe Packet received from:".to_string(),c_h_id.to_string()))?;
@@ -156,10 +162,10 @@ impl PacketProcessor {
     pub fn handle_connect_packet(&mut self, connect_packet: Connect, client_handler_id: u32) -> Result<Connack, Box<dyn std::error::Error>> {
         let client_id = connect_packet.connect_payload.client_id.to_owned();
         let clean_session = connect_packet.clean_session;
-        let exists_previous_session = self.clients.contains_key(&client_id);
+        let exists_previous_session = self.sessions.contains_key(&client_id);
     
         // Si hay un cliente con mismo client_id conectado, desconectamos la sesión del client anterior
-        if let Some(existing_session) = self.clients.get(&client_id){
+        if let Some(existing_session) = self.sessions.get(&client_id){
             if existing_session.is_active() {
                 let existing_handler_id = existing_session.get_client_handler_id().unwrap();
                 self.handle_disconnect_error(existing_handler_id);
@@ -171,9 +177,9 @@ impl PacketProcessor {
         // Si se quiere una conexión persistente y ya había una sesión, la retomamos
         if clean_session || ! exists_previous_session {
             let new_session = Session::new(client_handler_id, connect_packet)?;
-            self.clients.insert(new_session.get_client_id().to_string(), new_session);
+            self.sessions.insert(new_session.get_client_id().to_string(), new_session);
         }
-        let current_session = self.clients.get_mut(&client_id).unwrap(); //TODO: sacar unwrap
+        let current_session = self.sessions.get_mut(&client_id).unwrap(); //TODO: sacar unwrap
         current_session.connect(client_handler_id);
     
         // Enviamos el connack con 0 return code y el correspondiente flag de session_present:
@@ -199,7 +205,7 @@ impl PacketProcessor {
         let client_id = self.get_client_id_from_handler_id(c_h_id);
         let session;
         if let Some(client_id) = client_id {
-            session = self.clients.get_mut(&client_id).unwrap();
+            session = self.sessions.get_mut(&client_id).unwrap();
         } else {
             return Err("Client not found".into());
         }
@@ -219,7 +225,7 @@ impl PacketProcessor {
         let mut client_id = self.get_client_id_from_handler_id(c_h_id);
         let mut session;
         if let Some(client_id) = client_id {
-            session = self.clients.get_mut(&client_id).unwrap();
+            session = self.sessions.get_mut(&client_id).unwrap();
         } else {
             return Err("Client not found".into());
         }
@@ -263,13 +269,13 @@ impl PacketProcessor {
 
     }
 
-    pub fn handle_publish_packet(&mut self, publish_packet: Publish, c_h_id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
+    pub fn handle_publish_packet(&mut self, publish_packet: Publish) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
         println!("Se recibió el publish packet");
         //Sacamos el packet_id del pubblish
         //Sacar info del publish
         //Mandamos el puback al client.
 
-        //let current_session = self.clients.get_mut("a").unwrap(); //TODO: sacar unwrap
+        //let current_session = self.sessions.get_mut("a").unwrap(); //TODO: sacar unwrap
         let topic_name = &publish_packet.topic_name;
 
         //Retain Logic Publish
@@ -286,24 +292,21 @@ impl PacketProcessor {
 
         match publish_packet.flags.qos_level {
             Qos::AtMostOnce => {
-                self.handle_publish_packet_qos0(publish_packet, c_h_id)
+                self.handle_publish_packet_qos0(publish_packet)
             },
             _ => {
-                self.handle_publish_packet_qos1(publish_packet, c_h_id)
+                self.handle_publish_packet_qos1(publish_packet)
             }
         }
     }
 
-    fn handle_publish_packet_qos0(&mut self, publish_packet: Publish, c_h_id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
-        let publish_send = Publish::new(
-            PublishFlags::new(0b0011_0000),
-            publish_packet.topic_name.clone(),
-            publish_packet.packet_id,
-            publish_packet.application_message.clone(),
-        );
+    fn handle_publish_packet_qos0(&mut self, publish_packet: Publish) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
+        let mut publish_send = publish_packet.clone();
+        publish_send.flags.duplicate = false;
+        publish_send.flags.retain = false;
         
-        for (_, session) in &self.clients {
-            if session.is_subscribed_to(&publish_packet.topic_name) {
+        for (_, session) in &self.sessions {
+            if let Some(_) = session.is_subscribed_to(&publish_packet.topic_name) {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
                     self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
                 }
@@ -312,77 +315,48 @@ impl PacketProcessor {
         return Ok(None);
     }
 
-    fn handle_publish_packet_qos1(&mut self, publish_packet: Publish, c_h_id: u32) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
+    fn handle_publish_packet_qos1(&mut self, publish_packet: Publish) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
         let packet_id = publish_packet.packet_id;
 
-        let publish_send = Publish::new(
-            PublishFlags::new(0b0011_0010),
-            publish_packet.topic_name.clone(),
-            packet_id,
-            publish_packet.application_message.clone(),
-        );
+        let mut publish_send = publish_packet.clone();
+        publish_send.flags.duplicate = false;
+        publish_send.flags.retain = false;
                 
-        for (_, session) in &self.clients {
-            if session.is_subscribed_to(&publish_packet.topic_name) {
+        for (_, session) in &mut self.sessions {
+            if session.is_subscribed_to(&publish_packet.topic_name) == Some(Qos::AtLeastOnce) {
+                session.store_publish_packet(publish_send.clone());
+            }
+        }
+
+        for (_, session) in &self.sessions {
+            if session.is_subscribed_to(&publish_packet.topic_name) == Some(Qos::AtLeastOnce) {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
                     self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
                     self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send.clone())))).unwrap();
                 }
             }
         }
-
-
-        // for (_, session) in &self.clients {
-        //     if session.is_subscribed_to(&publish_packet.topic_name) {
-        //         if let Some(client_handler_id) = session.get_client_handler_id() {
-        //             self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
-
-        //             let senders_clone = self.senders_to_c_h_writers.clone();
-        //             let (tx, rx) = mpsc::channel();
-        //             self.qos_1_senders.insert(packet_id.unwrap(), tx);
-
-        //             let publish_packet = publish_packet.clone();
-        //             thread::spawn(move || {
-        //                 loop {
-        //                     if let Err(_) = rx.recv_timeout(Duration::from_millis(1000)) {
-        //                         println!("Resend");
-        //                         let publish_send = Publish::new(
-        //                             PublishFlags::new(0b0011_1010),
-        //                             publish_packet.topic_name.clone(),
-        //                             Some(35),
-        //                             publish_packet.application_message.clone(),
-        //                         );    
-        //                         let senders_hash = senders_clone.read().unwrap();
-        //                         let sender = senders_hash.get(&client_handler_id).unwrap();
-        //                         let sender_mutex_guard = sender.lock().unwrap();
-        //                         sender_mutex_guard.send(Ok(Packet::Publish(publish_send.clone()))).unwrap();
-        //                     } else {
-        //                         break;
-        //                     }
-        //                 }
-        //             });
-        //         }
-        //     }
-        // }
         
         println!("Se envio correctamente el PUBACK");
         return Ok(Some(Puback::new(packet_id.unwrap())));
     }
 
-    pub fn handle_puback_packet(&mut self, puback_packet: Puback, c_h_id: u32) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn handle_puback_packet(&mut self, puback_packet: Puback) -> Result<(), Box<dyn std::error::Error>> {
+        let puback_packet_id = puback_packet.packet_id;
         
         self.tx_to_puback_processor.send((0, Ok(Packet::Puback(puback_packet))))?;
+        
+        for (_, session) in &mut self.sessions {
+            session.unacknowledged_messages.retain(|publish_packet| publish_packet.packet_id.unwrap() != puback_packet_id)
+        }
 
-        // if let Some(sender) = self.qos_1_senders.get_mut(&puback_packet.packet_id) {
-        //     sender.send(()).unwrap();
-        //     return Ok(());
-        // }
-        // Err("packet not found".into())
         Ok(())
     }
 
+    
+
     fn get_client_id_from_handler_id(&self, c_h_id: u32) -> Option<String> {
-        for (client_id, session) in &self.clients {
+        for (client_id, session) in &self.sessions {
             if session.is_active() && session.get_client_handler_id().unwrap() == c_h_id {
                 return Some(client_id.to_string());
             }
