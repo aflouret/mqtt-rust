@@ -1,5 +1,5 @@
 use std::convert::TryInto;
-use common::all_packets::connect::Connect;
+use common::all_packets::connect::{Connect, ConnectPayload};
 use common::all_packets::connack::Connack;
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::pingreq::Pingreq;
@@ -16,8 +16,9 @@ use std::io::{BufRead, BufReader, Read};
 use common::all_packets::puback::Puback;
 use common::packet::Packet::Suback;
 use crate::client::ClientStatus::{StatusOff, StatusOn};
-use crate::handlers::{EventHandlers, HandlePublish, HandleSubscribe, HandleUnsubscribe};
+use crate::handlers::{EventHandlers, HandleDisconnect, HandlePublish, HandleSubscribe, HandleUnsubscribe};
 use crate::HandleConection;
+use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 
 const MAX_KEEP_ALIVE : u16 = 65000; // KeepAlive muy grande para el caso que keep_alive es 0 => en este caso el server no espera ningun tiempo para que el client envíe paquetes.
 
@@ -46,7 +47,7 @@ impl Client {
         self.server_stream = Some(stream);
     }
 
-    pub fn start_client(mut self, recv_conection: Receiver<EventHandlers>, sender_to_window: Sender<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn start_client(mut self, recv_conection: Receiver<EventHandlers>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
         thread::spawn(move || {
             let mut keep_alive_sec: u16 = 0;
             loop {
@@ -73,8 +74,6 @@ impl Client {
                     }
                     
                     Ok(EventHandlers::HandlePublish(publish)) => {
-                        println!("Entro a publish conn");
-                        //Client::handle_publish(&mut self.server_stream, publish).unwrap();
                         self.handle_publish(publish).unwrap();
                     }
                     Ok(EventHandlers::HandleSubscribe(subscribe)) => {
@@ -83,10 +82,10 @@ impl Client {
                     Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
                         self.handle_unsubscribe(unsubs).unwrap();
                     },
-/*                    Ok(EventHandlers::HandleDisconnect(disconnect)) => {
+                    Ok(EventHandlers::HandleDisconnect(disconnect)) => {
                         self.handle_disconnect(disconnect).unwrap();
                     }
-*/
+
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         self.handle_pingreq().unwrap(); 
                     }
@@ -99,7 +98,8 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_response(mut s: TcpStream, sender: Sender<String>) {
+    pub fn handle_response(mut s: TcpStream, sender: Sender<ResponseHandlers>) {
+        let mut subscriptions_msg: Vec<String> = Vec::new();
         thread::spawn(move || {
             loop {
                 let receiver_packet = Packet::read_from(&mut s).unwrap();
@@ -120,12 +120,14 @@ impl Client {
                     },
                     Packet::Publish(publish) => {
                         println!("CLIENT: Recibi publish: msg: {:?}", &publish.application_message);
-                        sender.send(publish.application_message.to_string());
+                        subscriptions_msg.push(publish.application_message.to_string() + " \n");
+                        let response = ResponseHandlers::PublishResponse(PublishResponse::new(publish, subscriptions_msg.clone(), "Published Succesfull".to_string()));
+                        sender.send(response);
                         let mut puback = Puback::new(10);
                         puback.write_to(&mut s);
                     },
                     Packet::Pingresp(_pingresp) => {
-                        println!("CLIENT: Pingresp successful received ");
+                        println!("CLIENT: Pingresp successful received");
                     }
                     _ => (),
                 };
@@ -133,12 +135,24 @@ impl Client {
         });
     }
 
+
     pub fn handle_pingreq(&mut self) -> io::Result<()>{
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
             let pingreq_packet = Pingreq::new(); //Usar new una vez mergeado
             println!("CLIENT: Send pinreq packet");
             pingreq_packet.write_to(&mut s);
+        }
+
+        Ok(())
+    }
+
+    pub fn handle_disconnect(&mut self, mut disconnect: HandleDisconnect) -> io::Result<()> {
+        if let Some(socket) = &mut self.server_stream {
+            let mut s = socket.try_clone()?;
+            let disconnect_packet = disconnect.disconnect_packet;
+            println!("CLIENT: Send disconnect packet: {:?}", &disconnect_packet);
+            disconnect_packet.write_to(&mut s);
         }
 
         Ok(())
@@ -176,13 +190,13 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<String>, keep_alive_sec: &mut u16) -> io::Result<()> {
+    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16) -> io::Result<()> {
         let address = conec.get_address();
         let mut socket = TcpStream::connect(address.clone()).unwrap();
         println!("Connecting to: {:?}", address);
-        let connect_packet = conec.connect_packet;
-        *keep_alive_sec = connect_packet.keep_alive_seconds.clone();
+        let connect_packet = Connect::new(ConnectPayload::new(conec.client_id,conec.last_will_topic, conec.last_will_msg, conec.username, conec.password),90, conec.clean_session, conec.last_will_retain, conec.last_will_qos);
         Client::handle_response(socket.try_clone().unwrap(), sender_to_window);
+        *keep_alive_sec = connect_packet.keep_alive_seconds.clone();
         println!("CLIENT: Send connect packet: {:?}", &connect_packet);
         connect_packet.write_to(&mut socket);
         self.set_server_stream(socket);

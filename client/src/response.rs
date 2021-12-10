@@ -1,11 +1,13 @@
 use common::all_packets::connack::Connack;
 use common::all_packets::puback::Puback;
+use common::all_packets::publish::Publish;
 use common::all_packets::suback::Suback;
-
+#[derive(Debug)]
 pub enum ResponseHandlers {
     ConnackResponse(ConnackResponse),
     PubackResponse(PubackResponse),
     SubackResponse(SubackResponse),
+    PublishResponse(PublishResponse),
 }
 
 
@@ -24,12 +26,26 @@ impl ConnackResponse {
 
 #[derive(Debug)]
 pub struct PubackResponse {
-    pub puback_packet: Puback,
+    pub msg: String,
 }
 
 impl PubackResponse {
-    pub fn new(puback_packet: Puback) -> Self {
-        Self{puback_packet: puback_packet}
+    pub fn new( msg: String) -> Self {
+        Self{msg: msg }
+    }
+
+}
+
+#[derive(Debug)]
+pub struct PublishResponse {
+    pub publish_packet: Publish,
+    pub msgs: Vec<String>,
+    pub msg_correct: String,
+}
+
+impl PublishResponse {
+    pub fn new(publish_packet: Publish, msgs: Vec<String>, msg_correct: String) -> Self {
+        Self{publish_packet: publish_packet, msgs: msgs, msg_correct: msg_correct }
     }
 
 }
@@ -37,6 +53,7 @@ impl PubackResponse {
 #[derive(Debug)]
 pub struct SubackResponse {
     pub suback_packet: Suback,
+
 }
 
 impl SubackResponse {
