@@ -120,7 +120,7 @@ impl Client {
                     },
                     Packet::Publish(publish) => {
                         println!("CLIENT: Recibi publish: msg: {:?}", &publish.application_message);
-                        subscriptions_msg.push(publish.application_message.to_string() + " \n");
+                        subscriptions_msg.push(publish.application_message.to_string() + " - topic:" + &*publish.topic_name.to_string() + " \n");
                         let response = ResponseHandlers::PublishResponse(PublishResponse::new(publish, subscriptions_msg.clone(), "Published Succesfull".to_string()));
                         sender.send(response);
                         let mut puback = Puback::new(10);
@@ -194,7 +194,7 @@ impl Client {
         let address = conec.get_address();
         let mut socket = TcpStream::connect(address.clone()).unwrap();
         println!("Connecting to: {:?}", address);
-        let connect_packet = Connect::new(ConnectPayload::new(conec.client_id,conec.last_will_topic, conec.last_will_msg, conec.username, conec.password),90, conec.clean_session, conec.last_will_retain, conec.last_will_qos);
+        let connect_packet = Connect::new(ConnectPayload::new(conec.client_id,conec.last_will_topic, conec.last_will_msg, conec.username, conec.password),3000, conec.clean_session, conec.last_will_retain, conec.last_will_qos);
         Client::handle_response(socket.try_clone().unwrap(), sender_to_window);
         *keep_alive_sec = connect_packet.keep_alive_seconds.clone();
         println!("CLIENT: Send connect packet: {:?}", &connect_packet);

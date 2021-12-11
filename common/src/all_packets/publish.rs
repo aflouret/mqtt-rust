@@ -91,7 +91,6 @@ impl ReadPacket for Publish {
 
         let topic_name = decode_mqtt_string(&mut remaining_bytes)?;
         verify_topic_name_withoud_wildcards(&topic_name)?;
-
         let packet_id = match publish_flags.qos_level {
             Qos::AtLeastOnce => {
                 let mut bytes = [0u8; 2];
@@ -101,7 +100,6 @@ impl ReadPacket for Publish {
             
             _ => None
         };
-
 
         let application_message = decode_mqtt_string(&mut remaining_bytes)?;
         println!("PUBLISH PACKET OK");

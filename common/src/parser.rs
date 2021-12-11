@@ -66,7 +66,6 @@ pub fn decode_mqtt_string(stream: &mut dyn Read) -> Result<String, std::io::Erro
     let mut bytes = [0u8; 2];
     stream.read_exact(&mut bytes)?;
     let number = u16::from_be_bytes(bytes);
-
     let mut bytes_2 = vec![0; number as usize];
     stream.read_exact(&mut bytes_2)?;
     let payload_ = String::from_utf8(bytes_2);

@@ -144,9 +144,9 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         let r = retain_checkbox.is_active();
         println!("{:?}", &r);
         let publish_packet = Publish::new(
-            PublishFlags::new(0b0100_1011),
+            PublishFlags::new(0b0011_0001),  //0b0011_101   0b0011_000
             (&topic_pub_entry.text()).to_string(),
-            Some(10),
+            None,
             (&app_msg_entry.text()).to_string(),
         );
         let event_publish = EventHandlers::HandlePublish(HandlePublish::new(publish_packet));

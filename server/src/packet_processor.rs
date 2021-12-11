@@ -253,8 +253,8 @@ impl PacketProcessor {
                 let publish_packet = Publish::new(
                     PublishFlags::new(0b0011_0011),
                     subscription.topic_filter,
-                    None,
-                    message.clone(),
+                    Some(10),
+                    self.retained_messages.get(message).unwrap().message.to_string(),
                 );
                 println!("Publish a mandar: {:?}",&publish_packet);
 
