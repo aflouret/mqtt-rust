@@ -1,7 +1,4 @@
-use common::all_packets::connect::{Connect, ConnectPayload};
 use common::all_packets::disconnect::Disconnect;
-use common::all_packets::publish::Publish;
-use common::all_packets::subscribe::Subscribe;
 use common::all_packets::unsubscribe::Unsubscribe;
 
 pub enum EventHandlers {
@@ -39,8 +36,10 @@ impl HandleConection {
                last_will_topic: Option<String>,
     ) -> Self {
         Self { address: address, client_id: client_id, clean_session: clean_session,
-            last_will_retain: last_will_retain, last_will_qos: last_will_qos, keep_alive_second: keep_alive_second,
-            username: username, password: password, last_will_msg: last_will_msg,
+            last_will_retain: last_will_retain, last_will_qos: last_will_qos,
+            keep_alive_second: keep_alive_second,
+            username: username, password: password,
+            last_will_msg: last_will_msg,
             last_will_topic: last_will_topic }
     }
 
@@ -51,28 +50,30 @@ impl HandleConection {
 
 #[derive(Debug)]
 pub struct HandlePublish {
-    pub publish_packet: Publish,
     pub topic: String,
     pub app_msg: String,
-    pub qos_level: bool,
+    pub qos0_level: bool,
+    pub qos1_level: bool,
     pub retain: bool,
 }
 
 impl HandlePublish {
-    pub fn new(publish_packet: Publish) -> Self {
-        Self { publish_packet: publish_packet, topic: "".to_string(), app_msg: "".to_string(), qos_level: false, retain: false }
+    pub fn new(topic: String, app_msg: String, qos0_level: bool, qos1_level:bool, retain: bool) -> Self {
+        Self {topic: topic, app_msg: app_msg, qos0_level: qos0_level, qos1_level: qos1_level, retain: retain }
     }
 }
 
 
 #[derive(Debug)]
 pub struct HandleSubscribe {
-    pub subscribe_packet: Subscribe,
+    pub topic: String,
+    pub qos1_level: bool,
+    pub qos0_level: bool,
 }
 
 impl HandleSubscribe {
-    pub fn new(subscribe_packet: Subscribe) -> Self {
-        Self { subscribe_packet: subscribe_packet }
+    pub fn new(topic: String, qos0_level: bool, qos1_level: bool) -> Self {
+        Self {topic: topic, qos0_level: qos0_level, qos1_level: qos1_level}
     }
 }
 

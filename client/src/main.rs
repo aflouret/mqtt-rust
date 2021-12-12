@@ -1,7 +1,6 @@
-use std::{io, thread};
+use std::{thread};
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender, SendError};
-use std::time::Duration;
+use std::sync::mpsc::{Receiver, Sender};
 use crate::client::Client;
 
 extern crate glib;
@@ -10,11 +9,7 @@ extern crate gtk;
 use glib::clone;
 use gtk::{Application, Builder, TextView};
 use gtk::prelude::*;
-use common::all_packets::connect::{Connect, ConnectPayload};
-use common::all_packets::publish::{Publish, PublishFlags};
-use common::all_packets::subscribe::{Subscribe};
 use common::all_packets::unsubscribe::{Unsubscribe};
-use common::packet::{Packet, Qos, Subscription};
 use crate::handlers::EventHandlers;
 use crate::handlers::HandleConection;
 use crate::handlers::HandlePublish;
@@ -37,8 +32,8 @@ fn main() {
     application.connect_activate(|app| {
         let (sender_conection, recv_conection) = mpsc::channel::<EventHandlers>();
         let (client_sender, window_recv) = mpsc::channel::<ResponseHandlers>();
-        let handler_to_client = thread::spawn(move || {
-            let mut client = Client::new("User".to_owned());
+        thread::spawn(move || {
+            let client = Client::new("User".to_owned());
             client.start_client(recv_conection, client_sender);
         });
         let builder = build_ui(app);
@@ -51,7 +46,7 @@ fn main() {
 ///Devuelve un objeto gtk::Builder al levantar un .glade
 fn build_ui(app: &gtk::Application) -> gtk::Builder {
     let glade_src = include_str!("interface.glade");
-    let mut builder = gtk::Builder::from_string(glade_src);
+    let builder = gtk::Builder::from_string(glade_src);
     let response_publish: gtk::Label = builder.object("response_publish").unwrap();
     response_publish.set_text("");
     let window: gtk::Window = builder.object("main_window").unwrap();
@@ -65,7 +60,6 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
     handle_publish_tab(builder.clone(), sender_conec.clone());
     handle_subscribe_tab(builder.clone(), sender_conec.clone());
     handle_unsubscribe(builder.clone(), sender_conec);
-    // main_window.handle_publish_tab(sender);
     let (intern_sender, intern_recv) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
     thread::spawn(move || {
@@ -105,11 +99,20 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let last_will_msg_entry: gtk::Entry = builder.object("lastWillMsg_entry").unwrap();
     let last_will_topic_entry: gtk::Entry = builder.object("lastWillTopic_entry").unwrap();
     let keep_alive_entry: gtk::Entry = builder.object("keep_alive_entry").unwrap();
+    let clean_session: gtk::CheckButton = builder.object("clean_session_check").unwrap();
+    let last_will_retain: gtk::CheckButton = builder.object("last_will_retain_check").unwrap();
+    let last_will_qos: gtk::CheckButton = builder.object("last_will_qos_check").unwrap();
+
+
     connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
         let address = (&ip_entry.text()).to_string() + ":" + &*(&port_entry.text()).to_string();
+        let a  = clean_session.is_active();
+        let b = last_will_retain.is_active();
+        let c = last_will_qos.is_active();
         let event_conection = EventHandlers::HandleConection(HandleConection::
             new(address.clone(),(&client_id_entry.text()).to_string(),
-                true, true, true, (&keep_alive_entry.text()).to_string(),
+                a, b, c,
+                (&keep_alive_entry.text()).to_string(),
                 Some((&username_entry.text()).to_string()),
                 Some((&password_entry.text()).to_string()),
                 Some((&last_will_msg_entry.text()).to_string()),
@@ -139,17 +142,9 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let retain_checkbox: gtk::CheckButton = builder.object("retain_checkbox").unwrap();
     let publish_button: gtk::Button = builder.object("publish_button").unwrap();
     publish_button.connect_clicked(clone!( @weak topic_pub_entry => move |_| {
-         let b = qos_1_rb.is_active();
-        println!("{:?}", &b);
-        let r = retain_checkbox.is_active();
-        println!("{:?}", &r);
-        let publish_packet = Publish::new(
-            PublishFlags::new(0b0011_0001),  //0b0011_101   0b0011_000
-            (&topic_pub_entry.text()).to_string(),
-            None,
-            (&app_msg_entry.text()).to_string(),
-        );
-        let event_publish = EventHandlers::HandlePublish(HandlePublish::new(publish_packet));
+        let event_publish = EventHandlers::HandlePublish(HandlePublish::new(
+            (&topic_pub_entry.text()).to_string(),(&app_msg_entry.text()).to_string(),
+            qos_0_rb.is_active(), qos_1_rb.is_active(), retain_checkbox.is_active()));
         sender.send(event_publish);
     }));
 }
@@ -157,17 +152,17 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
 fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let subscribe_button: gtk::Button = builder.object("suscribe_button").unwrap();
     let topic_subscribe_entry: gtk::Entry = builder.object("topic_suscribe_entry").unwrap();
-    let text_view: gtk::TextView = builder.object("text_view").unwrap();
-    let buffer: gtk::TextBuffer = builder.object("textbuffer1").unwrap();
-    /*    buffer.set_text("Probando");
-        text_view.buffer().unwrap();*/
-    /*    text_view.set_tooltip_text(Some("Probando"));*/
-    subscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
-        //text_view.buffer().unwrap();
-        let mut subscribe_packet = Subscribe::new(10);
-        subscribe_packet.add_subscription(Subscription{topic_filter: (&topic_subscribe_entry.text()).to_string(), max_qos: Qos::AtLeastOnce});
+    let _buffer: gtk::TextBuffer = builder.object("textbuffer1").unwrap();
 
-        let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(subscribe_packet));
+    let qos_0_rb: gtk::RadioButton = builder.object("qos_0_rb_subscribe").unwrap();
+    let qos_1_rb: gtk::RadioButton = builder.object("qos_1_rb_subscribe").unwrap();
+
+    subscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
+        println!("QOS0: {:?}", qos_0_rb.is_active());
+        println!("QOS1: {:?}", qos_1_rb.is_active());
+        let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(
+            (&topic_subscribe_entry.text()).to_string(), false, true
+        ));
         sender.send(event_subscribe);
     }));
 }
@@ -183,67 +178,4 @@ fn handle_unsubscribe(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         let event_unsubscribe = EventHandlers::HandleUnsubscribe(HandleUnsubscribe::new(unsubs_packet));
         sender.send(event_unsubscribe);
     }));
-}
-
-struct MainWindow {
-    builder: gtk::Builder,
-    sender: Sender<Packet>,
-}
-
-impl MainWindow {
-    pub fn new(builder: gtk::Builder, sender: Sender<Packet>) -> io::Result<Self> {
-        Ok(Self { builder: builder, sender: sender })
-    }
-    pub fn build(self) {
-        let connect_button: gtk::Button = self.builder.object("connect_button").unwrap();
-        let ip_entry: gtk::Entry = self.builder.object("ip_entry").unwrap();
-        let port_entry: gtk::Entry = self.builder.object("port_entry").unwrap();
-        let client_id_entry: gtk::Entry = self.builder.object("clientId_entry").unwrap();
-        let username_entry: gtk::Entry = self.builder.object("username_entry").unwrap();
-        let password_entry: gtk::Entry = self.builder.object("pass_entry").unwrap();
-        let last_will_msg_entry: gtk::Entry = self.builder.object("lastWillMsg_entry").unwrap();
-        let last_will_topic_entry: gtk::Entry = self.builder.object("lastWillTopic_entry").unwrap();
-        let address = (&ip_entry.text()).to_string() + ":" + &*(&port_entry.text()).to_string();
-        connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
-            self.sender.send(Packet::Connect(Connect::new(
-            ConnectPayload::new((&client_id_entry.text()).to_string(),
-                                Some((&last_will_topic_entry.text()).to_string()),
-                                Some((&last_will_msg_entry.text()).to_string()),
-                                Some((&username_entry.text()).to_string()),
-                                Some((&password_entry.text()).to_string()),
-            ),
-            60,
-            true,
-            true,
-            true,
-        )));
-                    username_entry.set_text("");
-        password_entry.set_text("");
-        client_id_entry.set_text("");
-        last_will_msg_entry.set_text("");
-        last_will_topic_entry.set_text("");
-        ip_entry.set_text("");
-        port_entry.set_text("");
-        }));
-    }
-
-
-    pub fn handle_publish_tab(self) {
-        let topic_pub_entry: gtk::Entry = self.builder.object("topic_publish_entry").unwrap();
-        let app_msg_entry: gtk::Entry = self.builder.object("appmsg_entry").unwrap();
-        let qos_0_rb: gtk::RadioButton = self.builder.object("qos_0_radiobutton").unwrap();
-        let qos_1_rb: gtk::RadioButton = self.builder.object("qos_1_radiobutton").unwrap();
-        let retain_checkbox: gtk::CheckButton = self.builder.object("retain_checkbox").unwrap();
-        let publish_button: gtk::Button = self.builder.object("publish_button").unwrap();
-        println!("Value of retain: {:?}", retain_checkbox.to_value());
-        println!("Value of qos: {:?}", qos_1_rb.to_value());
-        publish_button.connect_clicked(clone!( @weak topic_pub_entry => move |_| {
-            self.sender.send(Packet::Publish(Publish::new(
-                PublishFlags::new(0b0100_1011),
-                (&topic_pub_entry.text()).to_string(),
-                None,
-                (&app_msg_entry.text()).to_string(),
-        )));
-    }));
-    }
 }

@@ -5,7 +5,6 @@ use common::all_packets::suback::Suback;
 #[derive(Debug)]
 pub enum ResponseHandlers {
     ConnackResponse(ConnackResponse),
-    PubackResponse(PubackResponse),
     SubackResponse(SubackResponse),
     PublishResponse(PublishResponse),
 }
@@ -24,17 +23,6 @@ impl ConnackResponse {
 
 }
 
-#[derive(Debug)]
-pub struct PubackResponse {
-    pub msg: String,
-}
-
-impl PubackResponse {
-    pub fn new( msg: String) -> Self {
-        Self{msg: msg }
-    }
-
-}
 
 #[derive(Debug)]
 pub struct PublishResponse {
