@@ -11,6 +11,10 @@ pub struct Session {
     client_handler_id: Option<u32>,
     client_data: ClientData,
     client_subscriptions: Vec<Subscription>,
+    pub last_will_msg: Option<String>,
+    pub last_will_topic: Option<String>,
+    pub last_will_qos: Option<Qos>,
+    pub last_will_retain: bool,
     pub unacknowledged_messages: Vec<Publish>,
     pub is_clean_session: bool
 }
@@ -18,13 +22,25 @@ pub struct Session {
 impl Session {
     pub fn new(client_handler_id: u32, packet_connect: Connect) -> Result<Session, Box<dyn std::error::Error>> {
         let client_data = parse_connect_data(&packet_connect);
+        let mut qos = None;
+        if let Some(_msg) = &packet_connect.connect_payload.last_will_message {
+            if packet_connect.last_will_qos {
+                qos = Some(Qos::AtLeastOnce);
+            } else {
+                qos = Some(Qos::AtMostOnce);
+            }
+        }
         
         Ok(Session {
             client_handler_id: Some(client_handler_id),
             client_data,
             client_subscriptions: vec![],
             unacknowledged_messages: vec![],
-            is_clean_session: packet_connect.clean_session
+            is_clean_session: packet_connect.clean_session,
+            last_will_qos: qos,
+            last_will_msg: packet_connect.connect_payload.last_will_message,
+            last_will_topic: packet_connect.connect_payload.last_will_topic,
+            last_will_retain: packet_connect.last_will_retain,
         })
     }
 

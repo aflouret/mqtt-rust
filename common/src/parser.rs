@@ -63,13 +63,14 @@ pub fn encode_mqtt_string(string: &str) -> Result<Vec<u8>, String> {
 
 //Result<String, Box<dyn std::error::Error>>
 pub fn decode_mqtt_string(stream: &mut dyn Read) -> Result<String, std::io::Error> {
-    let mut bytes = [0u8; 2];
-    stream.read_exact(&mut bytes)?;
-    let number = u16::from_be_bytes(bytes);
+    let mut bytes_length = [0u8; 2];
+    stream.read_exact(&mut bytes_length)?;
+    let length = u16::from_be_bytes(bytes_length);
 
-    let mut bytes_2 = vec![0; number as usize];
-    stream.read_exact(&mut bytes_2)?;
-    let payload_ = String::from_utf8(bytes_2);
+    let mut bytes_string = vec![0; length as usize];
+    stream.read_exact(&mut bytes_string)?;
+
+    let payload_ = String::from_utf8(bytes_string);
     if let Ok(payload) = payload_ {
         return Ok(payload);
     } else {

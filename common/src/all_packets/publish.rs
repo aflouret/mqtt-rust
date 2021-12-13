@@ -30,7 +30,7 @@ impl Publish {
         }
 
         //PAYLOAD
-        length += encode_mqtt_string(&self.application_message)?.len();
+        length += self.application_message.as_bytes().len();
 
         Ok(length as u32)
     }
@@ -67,10 +67,11 @@ impl WritePacket for Publish {
 
         //PAYLOAD
         // Escribimos el mensaje
-        let encoded_message = encode_mqtt_string(&self.application_message)?;
-        for byte in &encoded_message {
+        let encoded_message = self.application_message.as_bytes();
+        for byte in encoded_message {
             stream.write_all(&[*byte])?;
         }
+
         println!("Publish packet escrito correctamente");
         
         Ok(())
@@ -88,22 +89,28 @@ impl ReadPacket for Publish {
         let mut remaining = vec![0u8; remaining_length as usize];
         stream.read_exact(&mut remaining)?;
         let mut remaining_bytes = Cursor::new(remaining);
+        let mut bytes_read: u32 = 0;
 
         let topic_name = decode_mqtt_string(&mut remaining_bytes)?;
-        verify_topic_name_withoud_wildcards(&topic_name)?;
+        bytes_read += (topic_name.len() + 2) as u32;
 
+        verify_topic_name_withoud_wildcards(&topic_name)?;
         let packet_id = match publish_flags.qos_level {
             Qos::AtLeastOnce => {
                 let mut bytes = [0u8; 2];
                 remaining_bytes.read_exact(&mut bytes)?;
+                bytes_read += 2;
                 Some(u16::from_be_bytes(bytes))
             }
             
             _ => None
         };
 
+        let mut app_message_bytes = vec![0u8; (remaining_length - bytes_read) as usize];
+        //let application_message = remaining_bytes.read_exact()?;
+        remaining_bytes.read_exact(&mut app_message_bytes)?;
+        let application_message = String::from_utf8(app_message_bytes)?;
 
-        let application_message = decode_mqtt_string(&mut remaining_bytes)?;
         println!("PUBLISH PACKET OK");
         println!("Publish packet leido correctamente");
 
@@ -191,7 +198,7 @@ mod tests {
         );
 
         let to_test = publish.get_remaining_length().unwrap();
-        assert_eq!(to_test, 16);
+        assert_eq!(to_test, 14);
 
     }
 
@@ -205,7 +212,7 @@ mod tests {
         );
         println!("{:?}",publish);
         let to_test = publish.get_remaining_length().unwrap();
-        assert_eq!(to_test, 18);
+        assert_eq!(to_test, 16);
 
     }
 

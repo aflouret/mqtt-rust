@@ -21,32 +21,36 @@ use common::all_packets::subscribe::Subscribe;
 use common::all_packets::pingreq::Pingreq;
 use common::all_packets::pingresp::Pingresp;
 
+const PACKETS_ID: u16 = 100;
+
 pub struct Message {
     pub message: String,
-    pub qos: Qos
+    pub qos: Qos,
 }
 
 pub struct PacketProcessor {
     sessions: HashMap<String, Session>,
-    rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
-    tx_to_puback_processor: Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
-    rx_from_packet_processor: Option<Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>>,
-    senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
+    rx: Receiver<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
+    tx_to_puback_processor: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
+    rx_from_packet_processor: Option<Receiver<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>>,
+    senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>>>,
     logger: Arc<Logger>,
     retained_messages: HashMap<String, Message>,
+    packets_id: HashMap<u16, bool>,
     //qos_1_senders: HashMap<u16, Sender<()>>,
 }
 
 impl PacketProcessor {
-
     pub fn new(
-        rx: Receiver<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>,
-        senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>,
+        rx: Receiver<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
+        senders_to_c_h_writers: Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>>>,
         logger: Arc<Logger>) -> PacketProcessor {
-        
-            let (tx_to_puback_processor, rx_from_packet_processor) = mpsc::channel(); 
-
-            PacketProcessor {
+        let (tx_to_puback_processor, rx_from_packet_processor) = mpsc::channel();
+        let mut packets: HashMap<u16, bool> = HashMap::new();
+        for i in 0..PACKETS_ID {
+            packets.insert(i, false);
+        }
+        PacketProcessor {
             sessions: HashMap::<String, Session>::new(),
             rx,
             tx_to_puback_processor,
@@ -54,12 +58,12 @@ impl PacketProcessor {
             senders_to_c_h_writers,
             logger,
             retained_messages: HashMap::<String, Message>::new(),
+            packets_id: packets,
             //qos_1_senders: HashMap::<u16, Sender<()>>::new(),
         }
     }
 
     pub fn run(mut self) -> JoinHandle<()> {
-        
         let join_handle = thread::spawn(move || {
             let senders_to_c_h_writers = self.senders_to_c_h_writers.clone();
             let rx_from_packet_processor = self.rx_from_packet_processor.take().unwrap();
@@ -71,91 +75,108 @@ impl PacketProcessor {
 
             loop {
                 if let Ok((c_h_id, packet)) = self.rx.recv() {
-
                     match packet {
                         Ok(packet) => {
                             if let Err(_) = self.process_packet(packet, c_h_id) {
                                 self.handle_disconnect_error(c_h_id);
                             }
-                        },
+                        }
                         Err(_) => {
                             self.handle_disconnect_error(c_h_id);
-                        },
+                        }
                     }
-
                 } else {
                     break;
-                }  
+                }
             }
 
             puback_proc_handle.join().unwrap();
         });
         join_handle
-    } 
+    }
 
     pub fn handle_disconnect_error(&mut self, c_h_id: u32) {
         // La session que tenía dicho c_h_id y era clean, debe eliminarse
+        let mut p = None;
+        if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+            p = Some(packet_id);
+            self.packets_id.insert(packet_id, true);
+        }
+        let session = self.sessions.iter()
+            .find(|(id, session)| session.get_client_handler_id() == Some(c_h_id)).unwrap().1;
+        let sess = session.clone();
+        let publish_packet = Publish::new(PublishFlags { duplicate: false, qos_level: sess.last_will_qos.unwrap(), retain: sess.last_will_retain }, "topic-a".to_string(), p, "me fui".to_string());
+        for (_, session) in &self.sessions {
+            if let Some(_) = session.is_subscribed_to(&publish_packet.topic_name) {
+                if let Some(client_handler_id) = session.get_client_handler_id() {
+                    self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_packet.clone())));
+                }
+            }
+        }
+
         self.sessions.retain(|_, session|
-            ! (session.get_client_handler_id() == Some(c_h_id) && session.is_clean_session));
+            !(session.get_client_handler_id() == Some(c_h_id) && session.is_clean_session));
 
         // Si es que no era clean, la desconectamos del c_h_id para que la próxima vez que se conecte
         // el mismo cliente, se use el c_h_id del nuevo c_h
         self.sessions.iter_mut()
             .filter(|(_, session)| session.get_client_handler_id() == Some(c_h_id))
-            .for_each(|(_,session)| session.disconnect());
+            .for_each(|(_, session)| session.disconnect());
 
         // Eliminamos el sender al c_h del hash ya que se va a dropear ese c_h
         let mut senders_hash = self.senders_to_c_h_writers.write().unwrap();
-        if let Some(sender) = senders_hash.remove(&c_h_id){
+        if let Some(sender) = senders_hash.remove(&c_h_id) {
             // Le mandamos al c_h_w que se cierre
             sender.lock().unwrap().send(Err(Box::new(SendError("Socket Disconnect")))).unwrap();
         }
-     }
+
+        //mandamos el publish a los suscriptores
+    }
 
     pub fn process_packet(&mut self, packet: Packet, c_h_id: u32) -> Result<(), Box<dyn std::error::Error>> {
         let response_packet = match packet {
-                Packet::Connect(connect_packet) => {
-                    self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(),c_h_id.to_string()))?;
-                    println!("Recibi el Connect (en process_pracket)");
-                    let connack_packet = self.handle_connect_packet(connect_packet, c_h_id)?;
-                    Some(Ok(Packet::Connack(connack_packet)))
-                }
+            Packet::Connect(connect_packet) => {
+                self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(), c_h_id.to_string()))?;
+                println!("Recibi el Connect (en process_pracket)");
+                let connack_packet = self.handle_connect_packet(connect_packet, c_h_id)?;
+                Some(Ok(Packet::Connack(connack_packet)))
+            }
 
-                Packet::Publish(publish_packet) => {
-                    self.logger.log_msg(LogMessage::new("Publish Packet received from:".to_string(),c_h_id.to_string()))?;
-                    let puback_packet = self.handle_publish_packet(publish_packet)?;
-                    if let Some(puback_packet) = puback_packet {
-                        Some(Ok(Packet::Puback(puback_packet)))
-                    } else {
-                        None
-                    }
-                },
-
-                Packet::Puback(puback_packet) => {
-                    self.logger.log_msg(LogMessage::new("Puback Packet received from:".to_string(),c_h_id.to_string()))?;
-                    self.handle_puback_packet(puback_packet)?;
+            Packet::Publish(publish_packet) => {
+                self.logger.log_msg(LogMessage::new("Publish Packet received from:".to_string(), c_h_id.to_string()))?;
+                let puback_packet = self.handle_publish_packet(publish_packet)?;
+                if let Some(puback_packet) = puback_packet {
+                    Some(Ok(Packet::Puback(puback_packet)))
+                } else {
                     None
                 }
+            }
 
-                Packet::Subscribe(subscribe_packet) => {
-                    self.logger.log_msg(LogMessage::new("Subscribe Packet received from:".to_string(),c_h_id.to_string()))?;
-                    let suback_packet = self.handle_subscribe_packet(subscribe_packet, c_h_id)?;
-                    Some(Ok(Packet::Suback(suback_packet)))
-                },
+            Packet::Puback(puback_packet) => {
+                self.logger.log_msg(LogMessage::new("Puback Packet received from:".to_string(), c_h_id.to_string()))?;
+                self.handle_puback_packet(puback_packet)?;
+                None
+            }
 
-                Packet::Pingreq(pingreq_packet) => {
-                    self.logger.log_msg(LogMessage::new("Pingreq Packet received from:".to_string(),c_h_id.to_string()))?;
-                    let pingresp_packet = self.handle_pingreq_packet(pingreq_packet, c_h_id)?;
-                    Some(Ok(Packet::Pingresp(pingresp_packet)))
-                },
+            Packet::Subscribe(subscribe_packet) => {
+                self.logger.log_msg(LogMessage::new("Subscribe Packet received from:".to_string(), c_h_id.to_string()))?;
+                let suback_packet = self.handle_subscribe_packet(subscribe_packet, c_h_id)?;
+                Some(Ok(Packet::Suback(suback_packet)))
+            }
 
-                _ => { return Err("Invalid packet".into()) },
-            };
+            Packet::Pingreq(pingreq_packet) => {
+                self.logger.log_msg(LogMessage::new("Pingreq Packet received from:".to_string(), c_h_id.to_string()))?;
+                let pingresp_packet = self.handle_pingreq_packet(pingreq_packet, c_h_id)?;
+                Some(Ok(Packet::Pingresp(pingresp_packet)))
+            }
 
-        if let Some(response_packet) = response_packet{
+            _ => { return Err("Invalid packet".into()); }
+        };
+
+        if let Some(response_packet) = response_packet {
             self.send_packet_to_client_handler(c_h_id, response_packet);
         }
-        
+
         Ok(())
     }
 
@@ -163,37 +184,36 @@ impl PacketProcessor {
         let client_id = connect_packet.connect_payload.client_id.to_owned();
         let clean_session = connect_packet.clean_session;
         let exists_previous_session = self.sessions.contains_key(&client_id);
-    
+
         // Si hay un cliente con mismo client_id conectado, desconectamos la sesión del client anterior
-        if let Some(existing_session) = self.sessions.get(&client_id){
+        if let Some(existing_session) = self.sessions.get(&client_id) {
             if existing_session.is_active() {
                 let existing_handler_id = existing_session.get_client_handler_id().unwrap();
                 self.handle_disconnect_error(existing_handler_id);
                 self.logger.log_msg(LogMessage::new("El cliente ya estaba conectado. Se remplazó la sesión por la nueva".to_string(), client_id.clone()))?;
             }
         }
-    
+
         // Si no se quiere conexión persistente o no había una sesión con mismo client_id, creamos una nueva
         // Si se quiere una conexión persistente y ya había una sesión, la retomamos
-        if clean_session || ! exists_previous_session {
+        if clean_session || !exists_previous_session {
             let new_session = Session::new(client_handler_id, connect_packet)?;
             self.sessions.insert(new_session.get_client_id().to_string(), new_session);
         }
         let current_session = self.sessions.get_mut(&client_id).unwrap(); //TODO: sacar unwrap
         current_session.connect(client_handler_id);
-    
+
         // Enviamos el connack con 0 return code y el correspondiente flag de session_present:
         // si hay clean_session, session_present debe ser false. Sino, depende de si ya teníamos sesión
         let session_present;
-        if clean_session { session_present = false; }
-        else { session_present = exists_previous_session; } // TODO: revisar esto, línea 683 pdf
-        
+        if clean_session { session_present = false; } else { session_present = exists_previous_session; } // TODO: revisar esto, línea 683 pdf
+
         let connack_packet = Connack::new(session_present, 0);
-        self.logger.log_msg(LogMessage::new("Connack packet send it to:".to_string(),client_handler_id.to_string()));
+        self.logger.log_msg(LogMessage::new("Connack packet send it to:".to_string(), client_handler_id.to_string()));
         Ok(connack_packet)
     }
 
-    pub fn handle_pingreq_packet(&mut self, _pingreq_packet: Pingreq, _c_h_id: u32) -> Result<Pingresp, Box<dyn std::error::Error>>{
+    pub fn handle_pingreq_packet(&mut self, _pingreq_packet: Pingreq, _c_h_id: u32) -> Result<Pingresp, Box<dyn std::error::Error>> {
         println!("Se recibió el pingreq packet");
 
         Ok(Pingresp::new())
@@ -216,7 +236,6 @@ impl PacketProcessor {
         }
 
         Ok(unsuback_packet)
-
     }
 
     pub fn handle_subscribe_packet(&mut self, subscribe_packet: Subscribe, c_h_id: u32) -> Result<Suback, Box<dyn std::error::Error>> {
@@ -243,20 +262,20 @@ impl PacketProcessor {
                 session.add_subscription(subscription.clone());
                 suback_packet.add_return_code(return_code)
             }
-            
+
             //Retain Logic Subscribe
-            
-            if let Some(message) = self.retained_messages.keys().find( |topic| 
+
+            if let Some(message) = self.retained_messages.keys().find(|topic|
                 topic_filters::filter_matches_topic(&subscription.topic_filter, topic)
             ) {
                 //Send publish al cliente con el mensaje en el retained_messages
                 let publish_packet = Publish::new(
                     PublishFlags::new(0b0011_0011),
                     subscription.topic_filter,
-                    None,
-                    message.clone(),
+                    Some(1),
+                    self.retained_messages.get(message).unwrap().message.to_string(),
                 );
-                println!("Publish a mandar: {:?}",&publish_packet);
+                println!("Publish a mandar: {:?}", &publish_packet);
 
                 let senders_hash = self.senders_to_c_h_writers.read().unwrap();
                 let sender = senders_hash.get(&c_h_id).unwrap();
@@ -266,7 +285,6 @@ impl PacketProcessor {
         }
         //suback_packet.add_return_code(SuccessAtMostOnce);///HARDCODED
         Ok(suback_packet)
-
     }
 
     pub fn handle_publish_packet(&mut self, publish_packet: Publish) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
@@ -286,14 +304,14 @@ impl PacketProcessor {
         if publish_packet.flags.retain {
             self.retained_messages.insert(topic_name.clone(), Message {
                 message: publish_packet.application_message.clone(),
-                qos: publish_packet.flags.qos_level
+                qos: publish_packet.flags.qos_level,
             });
         }
 
         match publish_packet.flags.qos_level {
             Qos::AtMostOnce => {
                 self.handle_publish_packet_qos0(publish_packet)
-            },
+            }
             _ => {
                 self.handle_publish_packet_qos1(publish_packet)
             }
@@ -304,7 +322,7 @@ impl PacketProcessor {
         let mut publish_send = publish_packet.clone();
         publish_send.flags.duplicate = false;
         publish_send.flags.retain = false;
-        
+
         for (_, session) in &self.sessions {
             if let Some(_) = session.is_subscribed_to(&publish_packet.topic_name) {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
@@ -318,10 +336,12 @@ impl PacketProcessor {
     fn handle_publish_packet_qos1(&mut self, publish_packet: Publish) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
         let packet_id = publish_packet.packet_id;
 
+
+
         let mut publish_send = publish_packet.clone();
         publish_send.flags.duplicate = false;
         publish_send.flags.retain = false;
-                
+
         for (_, session) in &mut self.sessions {
             if session.is_subscribed_to(&publish_packet.topic_name) == Some(Qos::AtLeastOnce) {
                 session.store_publish_packet(publish_send.clone());
@@ -331,21 +351,25 @@ impl PacketProcessor {
         for (_, session) in &self.sessions {
             if session.is_subscribed_to(&publish_packet.topic_name) == Some(Qos::AtLeastOnce) {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
+                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                        publish_send.packet_id = Some(packet_id);
+                        self.packets_id.insert(packet_id, true);
+                    }
                     self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
                     self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send.clone())))).unwrap();
                 }
             }
         }
-        
+
         println!("Se envio correctamente el PUBACK");
         return Ok(Some(Puback::new(packet_id.unwrap())));
     }
 
     pub fn handle_puback_packet(&mut self, puback_packet: Puback) -> Result<(), Box<dyn std::error::Error>> {
         let puback_packet_id = puback_packet.packet_id;
-        
+
         self.tx_to_puback_processor.send((0, Ok(Packet::Puback(puback_packet))))?;
-        
+
         for (_, session) in &mut self.sessions {
             session.unacknowledged_messages.retain(|publish_packet| publish_packet.packet_id.unwrap() != puback_packet_id)
         }
@@ -353,7 +377,6 @@ impl PacketProcessor {
         Ok(())
     }
 
-    
 
     fn get_client_id_from_handler_id(&self, c_h_id: u32) -> Option<String> {
         for (client_id, session) in &self.sessions {
@@ -369,5 +392,14 @@ impl PacketProcessor {
         let sender = senders_hash.get(&c_h_id).unwrap();
         let sender_mutex_guard = sender.lock().unwrap();
         sender_mutex_guard.send(packet).unwrap();
+    }
+
+    fn find_key_for_value(map: HashMap<u16, bool>, value: bool) -> Option<u16> {
+        for (key, value) in map {
+            if value == false {
+                return  Some(key);
+            }
+        }
+        None
     }
 }
