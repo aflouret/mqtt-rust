@@ -236,7 +236,7 @@ mod tests {
     }
     
     #[test]
-    fn correct_packet() {
+    fn correct_packet_qos1() {
         let publish_packet = Publish::new(
             PublishFlags::new(0b0100_1011),
             "Topic".to_string(),
@@ -254,6 +254,26 @@ mod tests {
                     && to_test.packet_id == publish_packet.packet_id
                     && to_test.application_message == publish_packet.application_message
             )
+        }
+    }
+
+    #[test]
+    fn correct_packet_qos0() {
+        let publish_packet = Publish::new(
+            PublishFlags::new(0b0100_0001),
+            "Topic".to_string(),
+            None,
+            "Message".to_string(),
+        );
+
+        let mut buff = Cursor::new(Vec::new());
+        publish_packet.write_to(&mut buff).unwrap();
+        buff.set_position(1);
+        let to_test = Publish::read_from(&mut buff, 0x31).unwrap();
+        if let Packet::Publish(to_test) = to_test {
+            assert_eq!(to_test.topic_name, publish_packet.topic_name);
+            assert_eq!(to_test.packet_id, publish_packet.packet_id);
+            assert_eq!(to_test.application_message, publish_packet.application_message);
         }
     }
 
