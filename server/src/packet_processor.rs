@@ -222,7 +222,7 @@ impl PacketProcessor {
 
         // Si hay un cliente con mismo client_id conectado, desconectamos la sesión del client anterior
         if let Some(existing_session) = self.sessions.get(&client_id) {
-            println!("Session existente ------> {:?}", existing_session);
+            println!("\n Session existente ------> {:?} \n ", existing_session);
             if existing_session.is_active() {
                 let existing_handler_id = existing_session.get_client_handler_id().unwrap();
                 self.handle_disconnect_error(existing_handler_id);
@@ -230,14 +230,20 @@ impl PacketProcessor {
             }
         }
 
-        // Si no se quiere conexión persistente o no había una sesión con mismo client_id, creamos una nueva
+        // Si no se quiere conexión persistente, o no había una sesión activa con mismo client_id, creamos una nueva
         // Si se quiere una conexión persistente y ya había una sesión, la retomamos
         if clean_session || !exists_previous_session {
             let new_session = Session::new(client_handler_id, connect_packet)?;
             self.sessions.insert(new_session.get_client_id().to_string(), new_session);
         }
-        let current_session = self.sessions.get_mut(&client_id).unwrap(); //TODO: sacar unwrap
+        let current_session = self.sessions.get_mut(&client_id).unwrap();
         current_session.connect(client_handler_id);
+
+        // Mandamos los unacknowledged_messages que haya, si los hay, en la session
+        let mut unacknowledged_messages_copy = current_session.unacknowledged_messages.clone();
+        // (Sólo nos quedamos con los packets que recién dieron error al mandarlos de vuelta)
+        unacknowledged_messages_copy.retain(|publish| self.handle_publish_packet(publish.clone()).is_err() );
+        self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
 
         // Enviamos el connack con 0 return code y el correspondiente flag de session_present:
         // si hay clean_session, session_present debe ser false. Sino, depende de si ya teníamos sesión
