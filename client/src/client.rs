@@ -124,12 +124,18 @@ impl Client {
                     }
                     Ok(Packet::Publish(publish)) => {
                         println!("CLIENT: Recibi publish: msg: {:?}", &publish.application_message);
-                        let packet_id_pub = publish.packet_id.unwrap();
+                        if let Some(id) = publish.packet_id {
+                            let puback = Puback::new(id);
+                            puback.write_to(&mut s);
+                        }
+                        //let packet_id_pub = publish.packet_id.unwrap();
                         subscriptions_msg.push(publish.application_message.to_string() + " - topic:" + &*publish.topic_name.to_string() + " \n");
                         let response = ResponseHandlers::PublishResponse(PublishResponse::new(publish, subscriptions_msg.clone(), "Published Succesfull".to_string()));
                         sender.send(response);
+                        /*
                         let puback = Puback::new(packet_id_pub);
                         puback.write_to(&mut s);
+                        */
                     }
                     Ok(Packet::Pingresp(_pingresp)) => {
                         println!("CLIENT: Pingresp successful received");
@@ -194,7 +200,7 @@ impl Client {
 
     pub fn create_subscribe_packet(subscribe: HandleSubscribe) -> io::Result<Subscribe> {
         let mut subscribe_packet = Subscribe::new(10);
-        subscribe_packet.add_subscription(Subscription { topic_filter: subscribe.topic, max_qos: Qos::AtLeastOnce });
+        subscribe_packet.add_subscription(Subscription { topic_filter: subscribe.topic, max_qos: subscribe.qos });
 
         Ok(subscribe_packet)
     }
@@ -232,11 +238,15 @@ impl Client {
             qos_lvl = Qos::AtMostOnce;
         }
 
+        let packet_id_send = match packet_id {
+            0 => None,
+            _ => Some(packet_id),
+        };
+
         let publish_packet = Publish::new(
             PublishFlags {duplicate: false, qos_level: qos_lvl, retain: publish.retain },
-            publish.topic, Some(packet_id), publish.app_msg,
+            publish.topic, packet_id_send, publish.app_msg,
         );
-
 
         Ok(publish_packet)
     }

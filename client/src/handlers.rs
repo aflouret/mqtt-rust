@@ -1,5 +1,6 @@
 use common::all_packets::disconnect::Disconnect;
 use common::all_packets::unsubscribe::Unsubscribe;
+use common::packet::Qos;
 
 pub enum EventHandlers {
     HandleConection(HandleConection),
@@ -67,13 +68,17 @@ impl HandlePublish {
 #[derive(Debug)]
 pub struct HandleSubscribe {
     pub topic: String,
-    pub qos1_level: bool,
-    pub qos0_level: bool,
+    pub qos: Qos,
 }
 
 impl HandleSubscribe {
-    pub fn new(topic: String, qos0_level: bool, qos1_level: bool) -> Self {
-        Self {topic: topic, qos0_level: qos0_level, qos1_level: qos1_level}
+    pub fn new(topic: String, qos0_is_active: bool) -> Self {
+        let qos = match qos0_is_active {
+            true => Qos::AtMostOnce,
+            false => Qos::AtLeastOnce,
+        };
+
+        Self {topic: topic, qos}
     }
 }
 
