@@ -29,14 +29,13 @@ mod response;
     let (sender_cli, recv_window) = mpsc::channel::<Packet>();
  */
 fn main() {
-    let application = gtk::Application::new(Some("com.taller.pong"), Default::default());
-
+    let application = gtk::Application::new(None, Default::default());
     application.connect_activate(|app| {
         let (sender_conection, recv_conection) = mpsc::channel::<EventHandlers>();
         let (client_sender, window_recv) = mpsc::channel::<ResponseHandlers>();
         thread::spawn(move || {
-            let client = Client::new("User".to_owned());
-            client.start_client(recv_conection, client_sender);
+            let client = Client::new("User".to_owned()); 
+            client.start_client(recv_conection, client_sender).unwrap();
         });
         let builder = build_ui(app);
         setup(builder, sender_conection.clone(), window_recv);
