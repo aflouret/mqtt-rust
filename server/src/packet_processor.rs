@@ -82,7 +82,6 @@ impl PacketProcessor {
                             }
                         }
                         Err(a) => {
-                            println!("entre1{:?}",a);
                             self.handle_disconnect_error(c_h_id);
                         }
                     }
@@ -97,6 +96,7 @@ impl PacketProcessor {
     }
 
     pub fn handle_disconnect(&mut self, c_h_id:u32) {
+        // La session que tenía dicho c_h_id y era clean, debe eliminarse
         self.sessions.retain(|_, session|
             !(session.get_client_handler_id() == Some(c_h_id) && session.is_clean_session));
 
@@ -111,50 +111,54 @@ impl PacketProcessor {
         if let Some(sender) = senders_hash.remove(&c_h_id) {
             // Le mandamos al c_h_w que se cierre
             sender.lock().unwrap().send(Err(Box::new(SendError("Socket Disconnect")))).unwrap();
-        }
+            println!("se mando el error este pp, linea 114");
+        }       
     }
 
     pub fn handle_disconnect_error(&mut self, c_h_id: u32) {
-        // La session que tenía dicho c_h_id y era clean, debe eliminarse
-        let mut p = None;
-        if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
-            p = Some(packet_id);
-            self.packets_id.insert(packet_id, true);
-        }
+        // Obtenemos la session del c_h_id. Si no existe, es porque ya se desconectó el client con Disconnect
         let session = match self.sessions.iter()
-        .find(|(id, session)| session.get_client_handler_id() == Some(c_h_id)) {
-            Some(algo) => algo.1,
-            None =>  return
+            .find(|(_id, session)| session.get_client_handler_id() == Some(c_h_id)) {
+                Some((_client_id, session)) => session,
+                None =>  return
         };
-        // let session = self.sessions.iter()
-        //     .find(|(id, session)| session.get_client_handler_id() == Some(c_h_id)).unwrap().1;
-        let sess = session.clone();
-        let publish_packet = Publish::new(PublishFlags { duplicate: false, qos_level: sess.last_will_qos.unwrap(), retain: sess.last_will_retain }, "topic-a".to_string(), p, "me fui".to_string());
-        for (_, session) in &self.sessions {
-            if let Some(_) = session.is_subscribed_to(&publish_packet.topic_name) {
-                if let Some(client_handler_id) = session.get_client_handler_id() {
-                    self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_packet.clone())));
+        
+        println!("Session: {:?}", session);
+
+        // Si hay last will
+        if let Some(_) = session.last_will_msg {
+            // Mandamos el publish con el last will msg al last will topic
+            let mut p = None;
+            if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                p = Some(packet_id);
+                self.packets_id.insert(packet_id, true);
+            }
+            
+            // Mandamos el publish a los suscriptores 
+            //TODO: solo hacer si es que hay last will
+            let sess = session.clone();
+            let publish_packet = Publish::new(
+                PublishFlags { 
+                    duplicate: false, 
+                    qos_level: sess.last_will_qos.unwrap(), 
+                    retain: sess.last_will_retain },
+                sess.last_will_topic.as_ref().unwrap().clone(),
+                p,
+                sess.last_will_msg.as_ref().unwrap().clone());
+
+            print!("Voy a mandar el publish last will {:?}", publish_packet); 
+
+            for (_, session) in &self.sessions {
+                if let Some(_) = session.is_subscribed_to(&publish_packet.topic_name) { 
+                    if let Some(c_h_id) = session.get_client_handler_id() {
+                        self.send_packet_to_client_handler(c_h_id, Ok(Packet::Publish(publish_packet.clone())));
+                    }
                 }
             }
+
         }
-
-        self.sessions.retain(|_, session|
-            !(session.get_client_handler_id() == Some(c_h_id) && session.is_clean_session));
-
-        // Si es que no era clean, la desconectamos del c_h_id para que la próxima vez que se conecte
-        // el mismo cliente, se use el c_h_id del nuevo c_h
-        self.sessions.iter_mut()
-            .filter(|(_, session)| session.get_client_handler_id() == Some(c_h_id))
-            .for_each(|(_, session)| session.disconnect());
-
-        // Eliminamos el sender al c_h del hash ya que se va a dropear ese c_h
-        let mut senders_hash = self.senders_to_c_h_writers.write().unwrap();
-        if let Some(sender) = senders_hash.remove(&c_h_id) {
-            // Le mandamos al c_h_w que se cierre
-            sender.lock().unwrap().send(Err(Box::new(SendError("Socket Disconnect")))).unwrap();
-        }
-
-        //mandamos el publish a los suscriptores
+        
+        self.handle_disconnect(c_h_id);        
     }
 
     pub fn process_packet(&mut self, packet: Packet, c_h_id: u32) -> Result<(), Box<dyn std::error::Error>> {
@@ -225,6 +229,7 @@ impl PacketProcessor {
 
         // Si hay un cliente con mismo client_id conectado, desconectamos la sesión del client anterior
         if let Some(existing_session) = self.sessions.get(&client_id) {
+            println!("Session existente ------> {:?}", existing_session);
             if existing_session.is_active() {
                 let existing_handler_id = existing_session.get_client_handler_id().unwrap();
                 self.handle_disconnect_error(existing_handler_id);

@@ -7,6 +7,7 @@ use crate::topic_filters;
 
 
 //Manjea datos del cliente
+#[derive(Debug)]
 pub struct Session {
     client_handler_id: Option<u32>,
     client_data: ClientData,
@@ -62,6 +63,13 @@ impl Session {
 
     pub fn disconnect(&mut self) {
         self.client_handler_id = None;
+
+        if let Some(_) = self.last_will_msg {
+            self.last_will_msg = None;
+            self.last_will_topic = None;
+            self.last_will_qos = None;
+            self.last_will_retain = false;
+        }
     }
 
     pub fn is_subscribed_to(&self, topic_name: &String) -> Option<Qos> {
@@ -89,6 +97,7 @@ impl Session {
     pub fn store_publish_packet(&mut self, publish_packet: Publish) {
         self.unacknowledged_messages.push(publish_packet);
     }
+
 }
 
 fn parse_connect_data(packet_connect: &Connect) -> ClientData {
@@ -99,6 +108,7 @@ fn parse_connect_data(packet_connect: &Connect) -> ClientData {
     }
 }
 
+#[derive(PartialEq, Debug)]
 pub struct ClientData{
     client_id: String,
     username: Option<String>,
@@ -116,4 +126,4 @@ pub struct ClientData{
 //     // Optional: QoS0 messages pending transmission to the Client
 // }
 
-pub struct ApplicationMessage;
+// pub struct ApplicationMessage;
