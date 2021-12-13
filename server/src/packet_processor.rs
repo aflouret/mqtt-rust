@@ -188,6 +188,12 @@ impl PacketProcessor {
                 Some(Ok(Packet::Suback(suback_packet)))
             }
 
+            Packet::Unsubscribe(unsubscribe_packet) => {
+                self.logger.log_msg(LogMessage::new("Unsubscribe Packet received from:".to_string(), c_h_id.to_string()))?;
+                let unsuback_packet = self.handle_unsubscribe_packet(unsubscribe_packet, c_h_id)?;
+                Some(Ok(Packet::Unsuback(unsuback_packet)))
+            }
+
             Packet::Pingreq(pingreq_packet) => {
                 self.logger.log_msg(LogMessage::new("Pingreq Packet received from:".to_string(), c_h_id.to_string()))?;
                 let pingresp_packet = self.handle_pingreq_packet(pingreq_packet, c_h_id)?;
@@ -252,7 +258,7 @@ impl PacketProcessor {
     }
 
     pub fn handle_unsubscribe_packet(&mut self, unsubscribe_packet: Unsubscribe, c_h_id: u32) -> Result<Unsuback, Box<dyn std::error::Error>> {
-        println!("Se recibió el subscribe packet");
+        println!("Se recibió el unsubscribe packet");
 
         let client_id = self.get_client_id_from_handler_id(c_h_id);
         let session;
