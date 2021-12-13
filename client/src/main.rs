@@ -18,7 +18,7 @@ use crate::handlers::HandleConection;
 use crate::handlers::HandlePublish;
 use crate::handlers::HandleSubscribe;
 use crate::handlers::HandleUnsubscribe;
-use crate::response::{PublishResponse, ResponseHandlers};
+use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 
 mod client;
 mod handlers;
@@ -63,15 +63,19 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
     handle_publish_tab(builder.clone(), sender_conec.clone());
     handle_subscribe_tab(builder.clone(), sender_conec.clone());
     handle_unsubscribe(builder.clone(), sender_conec);
-    let (intern_sender, intern_recv) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+    let (intern_sender, intern_recv) = glib::MainContext::channel::<ResponseHandlers>(glib::PRIORITY_DEFAULT);
+    //let (intern_sender, intern_recv) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
     thread::spawn(move || {
         loop {
             if let Ok(response) = window_recv.recv() {
                 match response {
                     ResponseHandlers::PublishResponse(publish) => {
-                        intern_sender.send(publish).unwrap();
+                        intern_sender.send(ResponseHandlers::PublishResponse(PublishResponse::new(publish.publish_packet,publish.msgs.clone(),publish.msg_correct))).unwrap();
                     },
+                    ResponseHandlers::PubackResponse(puback) => {
+                        intern_sender.send(ResponseHandlers::PubackResponse(PubackResponse::new(puback.msg))).unwrap();
+                    }
                     _ => ()
                 }
             }
@@ -81,15 +85,23 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
     let response_publish: gtk::Label = builder.object("response_publish").unwrap();
     let buffer: gtk::TextBuffer = builder.object("textbuffer1").unwrap();
     let mut joined_string: String = "".to_string();
-    intern_recv.attach(None, move |publish: PublishResponse| {
-        if let Some(msg) = publish.msgs.get(publish.msgs.len() - 1) {
-            joined_string += msg;
+    intern_recv.attach(None, move |response: ResponseHandlers| {
+        match response {
+            ResponseHandlers::PublishResponse(publish) => {
+                if let Some(msg) = publish.msgs.get(publish.msgs.len() - 1) {
+                    joined_string += msg;
+                }
+                buffer.set_text(&joined_string);
+            },
+            ResponseHandlers::PubackResponse(puback) => {
+                let puback_msg = puback.msg;
+                response_publish.set_text(&*puback_msg);
+            }
+            _ => ()
         }
-        buffer.set_text(&joined_string);
-        let publish_correct_msg = publish.msg_correct;
-        response_publish.set_text(&*publish_correct_msg);
         glib::Continue(true)
     });
+
 }
 
 fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {

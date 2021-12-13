@@ -16,7 +16,7 @@ use common::all_packets::subscribe::Subscribe;
 use common::packet::{SOCKET_CLOSED_ERROR_MSG};
 use crate::handlers::{EventHandlers, HandleDisconnect, HandlePublish, HandleSubscribe, HandleUnsubscribe};
 use crate::HandleConection;
-use crate::response::{PublishResponse, ResponseHandlers};
+use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 
 const MAX_KEEP_ALIVE: u16 = 65000;
 const MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE: u64 = 10;
@@ -124,6 +124,10 @@ impl Client {
                     }
                     Ok(Packet::Puback(_puback)) => {
                         println!("CLIENT: PUBACK packet successful received");
+                        let puback_response = ResponseHandlers::PubackResponse(PubackResponse::new("PubackResponse".to_string()));
+                        sender.send(puback_response);
+                        thread::sleep(Duration::new(2,0));
+                        sender.send(ResponseHandlers::PubackResponse(PubackResponse::new("".to_string())));
                         //sender.send("Topic Successfully published".to_string());
                         //mandar via channel el puback al puback processor,
                     }
