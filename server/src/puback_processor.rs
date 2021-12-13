@@ -6,6 +6,7 @@ use common::all_packets::unsuback::Unsuback;
 use common::all_packets::unsubscribe::Unsubscribe;
 use common::packet::{Packet, Qos};
 use std::collections::HashMap;
+use std::fmt::Error;
 use common::all_packets::publish::{Publish, PublishFlags, self};
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex, mpsc};
@@ -76,15 +77,19 @@ impl PubackProcessor {
 
         for (id, mut packet) in to_send {
             packet.flags.duplicate = true;
-            self.send_packet(id, packet);
+            if let Err(_) = self.send_packet(id, packet) {
+                self.publish_packets.retain(|(_, c_h_id, _)| *c_h_id != id);
+                break;
+            };
         }
     }
 
-    fn send_packet(&mut self, id: u32, publish_packet: Publish) {
+    fn send_packet(&mut self, id: u32, publish_packet: Publish) -> Result<(), Box<dyn std::error::Error>> {
         let senders_hash = self.senders_to_c_h_writers.read().unwrap();
-        let sender = senders_hash.get(&id).unwrap();
+        let sender = senders_hash.get(&id).ok_or("Sender not found")?;
         let sender_mutex_guard = sender.lock().unwrap();
         sender_mutex_guard.send(Ok(Packet::Publish(publish_packet))).unwrap();
+        Ok(())
     }
 }
 
