@@ -163,8 +163,7 @@ fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         println!("QOS0: {:?}", qos_0_rb.is_active());
         println!("QOS1: {:?}", qos_1_rb.is_active());
         let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(
-            (&topic_subscribe_entry.text()).to_string(), false, true
-        ));
+            (&topic_subscribe_entry.text()).to_string(), qos_0_rb.is_active()));
         sender.send(event_subscribe);
     }));
 }
