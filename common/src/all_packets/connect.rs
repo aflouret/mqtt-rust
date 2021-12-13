@@ -186,9 +186,13 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
 }
 
 fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
-    if (!flags.last_will_flag && (flags.last_will_retain || flags.last_will_qos)) 
-        || (!flags.last_will_qos && flags.last_will_flag)
-        || (!flags.username && flags.password) {
+    //If the Will Flag is set to 0 the Will QoS and Will Retain fields in the Connect Flags MUST be set to zero
+    if !flags.last_will_flag && (flags.last_will_qos || flags.last_will_retain){
+        return Err(INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG.into());
+    }
+
+    //If the User Name Flag is set to 0, the Password Flag MUST be set to 0
+    if !flags.username && flags.password {
         return Err(INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG.into());
     }
 
