@@ -148,14 +148,7 @@ impl PacketProcessor {
 
             print!("Voy a mandar el publish last will {:?}", publish_packet); 
 
-            for (_, session) in &self.sessions {
-                if let Some(_) = session.is_subscribed_to(&publish_packet.topic_name) { 
-                    if let Some(c_h_id) = session.get_client_handler_id() {
-                        self.send_packet_to_client_handler(c_h_id, Ok(Packet::Publish(publish_packet.clone())));
-                    }
-                }
-            }
-
+            self.handle_publish_packet(publish_packet).unwrap();
         }
         
         self.handle_disconnect(c_h_id);        
