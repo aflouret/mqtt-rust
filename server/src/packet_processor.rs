@@ -81,7 +81,8 @@ impl PacketProcessor {
                                 self.handle_disconnect_error(c_h_id);
                             }
                         }
-                        Err(_) => {
+                        Err(a) => {
+                            println!("entre1{:?}",a);
                             self.handle_disconnect_error(c_h_id);
                         }
                     }
@@ -95,6 +96,24 @@ impl PacketProcessor {
         join_handle
     }
 
+    pub fn handle_disconnect(&mut self, c_h_id:u32) {
+        self.sessions.retain(|_, session|
+            !(session.get_client_handler_id() == Some(c_h_id) && session.is_clean_session));
+
+        // Si es que no era clean, la desconectamos del c_h_id para que la próxima vez que se conecte
+        // el mismo cliente, se use el c_h_id del nuevo c_h
+        self.sessions.iter_mut()
+            .filter(|(_, session)| session.get_client_handler_id() == Some(c_h_id))
+            .for_each(|(_, session)| session.disconnect());
+
+        // Eliminamos el sender al c_h del hash ya que se va a dropear ese c_h
+        let mut senders_hash = self.senders_to_c_h_writers.write().unwrap();
+        if let Some(sender) = senders_hash.remove(&c_h_id) {
+            // Le mandamos al c_h_w que se cierre
+            sender.lock().unwrap().send(Err(Box::new(SendError("Socket Disconnect")))).unwrap();
+        }
+    }
+
     pub fn handle_disconnect_error(&mut self, c_h_id: u32) {
         // La session que tenía dicho c_h_id y era clean, debe eliminarse
         let mut p = None;
@@ -102,8 +121,13 @@ impl PacketProcessor {
             p = Some(packet_id);
             self.packets_id.insert(packet_id, true);
         }
-        let session = self.sessions.iter()
-            .find(|(id, session)| session.get_client_handler_id() == Some(c_h_id)).unwrap().1;
+        let session = match self.sessions.iter()
+        .find(|(id, session)| session.get_client_handler_id() == Some(c_h_id)) {
+            Some(algo) => algo.1,
+            None =>  return
+        };
+        // let session = self.sessions.iter()
+        //     .find(|(id, session)| session.get_client_handler_id() == Some(c_h_id)).unwrap().1;
         let sess = session.clone();
         let publish_packet = Publish::new(PublishFlags { duplicate: false, qos_level: sess.last_will_qos.unwrap(), retain: sess.last_will_retain }, "topic-a".to_string(), p, "me fui".to_string());
         for (_, session) in &self.sessions {
@@ -168,6 +192,14 @@ impl PacketProcessor {
                 self.logger.log_msg(LogMessage::new("Pingreq Packet received from:".to_string(), c_h_id.to_string()))?;
                 let pingresp_packet = self.handle_pingreq_packet(pingreq_packet, c_h_id)?;
                 Some(Ok(Packet::Pingresp(pingresp_packet)))
+            }
+
+            Packet::Disconnect(_disconnect_packet) => {
+                self.logger.log_msg(LogMessage::new("Disconnect Packet received from:".to_string(), c_h_id.to_string()))?;
+                //self.handle_disconnect_packet(c_h_id)?;
+                // TODO: desconectar al cliente...
+                self.handle_disconnect(c_h_id);
+                None
             }
 
             _ => { return Err("Invalid packet".into()); }

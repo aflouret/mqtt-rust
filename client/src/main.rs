@@ -6,10 +6,12 @@ use crate::client::Client;
 extern crate glib;
 extern crate gtk;
 
+use common::all_packets::disconnect::Disconnect;
 use glib::clone;
 use gtk::{Application, Builder, TextView};
 use gtk::prelude::*;
 use common::all_packets::unsubscribe::{Unsubscribe};
+use handlers::HandleDisconnect;
 use crate::handlers::EventHandlers;
 use crate::handlers::HandleConection;
 use crate::handlers::HandlePublish;
@@ -103,7 +105,7 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let last_will_retain: gtk::CheckButton = builder.object("last_will_retain_check").unwrap();
     let last_will_qos: gtk::CheckButton = builder.object("last_will_qos_check").unwrap();
 
-
+    let sender_for_disconnect = sender.clone();
     connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
         let address = (&ip_entry.text()).to_string() + ":" + &*(&port_entry.text()).to_string();
         let a  = clean_session.is_active();
@@ -118,7 +120,7 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
                 Some((&last_will_msg_entry.text()).to_string()),
                 Some((&last_will_topic_entry.text()).to_string()),
         ));
-        sender.send(event_conection);
+        sender.send(event_conection).unwrap();
 /*        username_entry.set_text("");
         password_entry.set_text("");
         client_id_entry.set_text("");
@@ -128,10 +130,11 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         port_entry.set_text("");*/
         }));
 
-/*    let disconnect_button: gtk::Button = builder.object("disconnect_button").unwrap();
+    let disconnect_button: gtk::Button = builder.object("disconnect_button").unwrap();
     disconnect_button.connect_clicked(clone! (@weak disconnect_button => move |_| {
-        sender.send(Disconnect::new())
-    }));*/
+        let event_disconection = EventHandlers::HandleDisconnect(HandleDisconnect::new(Disconnect::new()));
+        sender_for_disconnect.send(event_disconection).unwrap();
+    }));
 }
 
 fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {

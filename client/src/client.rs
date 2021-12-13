@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use common::packet::{Packet, Qos, Subscription};
 use common::packet::WritePacket;
-use std::net::TcpStream;
+use std::net::{TcpStream, Shutdown};
 use std::sync::{Arc, mpsc, Mutex};
 use std::sync::mpsc::{Receiver, Sender};
 use std::{io, thread};
@@ -104,25 +104,25 @@ impl Client {
         let mut subscriptions_msg: Vec<String> = Vec::new();
         thread::spawn(move || {
             loop {
-                let receiver_packet = Packet::read_from(&mut s).unwrap();
+                let receiver_packet = Packet::read_from(&mut s);
                 match receiver_packet {
-                    Packet::Connack(_connack) => {
+                    Ok(Packet::Connack(_connack)) => {
                         println!("CLIENT: CONNACK packet successful received");
                         // sender.send("PONG".to_string());
                     }
-                    Packet::Puback(_puback) => {
+                    Ok(Packet::Puback(_puback)) => {
                         println!("CLIENT: PUBACK packet successful received");
                         //sender.send("Topic Successfully published".to_string());
                         //mandar via channel el puback al puback processor,
                     }
-                    Packet::Suback(_suback) => {
+                    Ok(Packet::Suback(_suback)) => {
                         println!("CLIENT: SUBACK packet successful received");
                         //liberar el packet id que nos mandan
                     }
-                    Packet::Unsuback(_unsuback) => {
+                    Ok(Packet::Unsuback(_unsuback)) => {
                         println!("CLIENT: UNSUBACK packet successful received");
                     }
-                    Packet::Publish(publish) => {
+                    Ok(Packet::Publish(publish)) => {
                         println!("CLIENT: Recibi publish: msg: {:?}", &publish.application_message);
                         let packet_id_pub = publish.packet_id.unwrap();
                         subscriptions_msg.push(publish.application_message.to_string() + " - topic:" + &*publish.topic_name.to_string() + " \n");
@@ -131,10 +131,14 @@ impl Client {
                         let puback = Puback::new(packet_id_pub);
                         puback.write_to(&mut s);
                     }
-                    Packet::Pingresp(_pingresp) => {
+                    Ok(Packet::Pingresp(_pingresp)) => {
                         println!("CLIENT: Pingresp successful received");
                     }
-                    _ => (),
+                    Err(_) => {
+                        println!("Socket cerrado");
+                        break;
+                    }    
+                    _ => ()
                 };
             }
         });
@@ -157,7 +161,10 @@ impl Client {
             let mut s = socket.try_clone()?;
             let disconnect_packet = disconnect.disconnect_packet;
             println!("CLIENT: Send disconnect packet: {:?}", &disconnect_packet);
-            disconnect_packet.write_to(&mut s);
+            disconnect_packet.write_to(&mut s).unwrap();
+            println!("escrito el disconnect");
+            //TODO: cerrar la conexion
+            socket.shutdown(Shutdown::Both).unwrap();
         }
 
         Ok(())

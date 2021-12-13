@@ -96,6 +96,7 @@ pub struct HandleDisconnect {
 
 impl HandleDisconnect {
     pub fn new(disconnect_packet: Disconnect) -> Self {
+        println!("disconnect");
         Self { disconnect_packet: disconnect_packet }
     }
 }
