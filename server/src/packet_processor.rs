@@ -1,7 +1,8 @@
 use crate::session::Session;
 use crate::topic_filters;
 use crate::puback_processor::PubackProcessor;
-use common::all_packets::connack::Connack;
+use crate::authenticator::Authenticator;
+use common::all_packets::connack::{Connack, CONNACK_BAD_USERNAME_OR_PASSWORD};
 use common::all_packets::connect::Connect;
 use common::all_packets::unsuback::Unsuback;
 use common::all_packets::unsubscribe::Unsubscribe;
@@ -20,6 +21,7 @@ use common::all_packets::suback::SubackReturnCode::SuccessAtMostOnce;
 use common::all_packets::subscribe::Subscribe;
 use common::all_packets::pingreq::Pingreq;
 use common::all_packets::pingresp::Pingresp;
+use std::io::{Error, ErrorKind};
 
 const PACKETS_ID: u16 = 100;
 
@@ -37,6 +39,7 @@ pub struct PacketProcessor {
     logger: Arc<Logger>,
     retained_messages: HashMap<String, Message>,
     packets_id: HashMap<u16, bool>,
+    authenticator: Authenticator
     //qos_1_senders: HashMap<u16, Sender<()>>,
 }
 
@@ -60,6 +63,7 @@ impl PacketProcessor {
             retained_messages: HashMap::<String, Message>::new(),
             packets_id: packets,
             //qos_1_senders: HashMap::<u16, Sender<()>>::new(),
+            authenticator: Authenticator::from("accounts.txt".to_string()).unwrap(),
         }
     }
 
@@ -216,6 +220,22 @@ impl PacketProcessor {
     }
 
     pub fn handle_connect_packet(&mut self, connect_packet: Connect, client_handler_id: u32) -> Result<Connack, Box<dyn std::error::Error>> {
+        //Authentication 
+        if let Some(password) = &connect_packet.connect_payload.password {
+            match &connect_packet.connect_payload.username {
+                None => {
+                    return Err(Box::new(Error::new(ErrorKind::Other, "Invalid Packet: Contains password but no username")))
+                },
+                Some(username) => {
+                    if !self.authenticator.account_is_valid(&username, password){
+                        println!("Invalid Acount: sending Connack packet with error code");
+                        return Ok(Connack::new(false, CONNACK_BAD_USERNAME_OR_PASSWORD))
+                    }
+                },
+            }
+        }
+        println!("Valid Account");
+
         let client_id = connect_packet.connect_payload.client_id.to_owned();
         let clean_session = connect_packet.clean_session;
         let exists_previous_session = self.sessions.contains_key(&client_id);
