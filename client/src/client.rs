@@ -219,36 +219,28 @@ impl Client {
     }
 
     pub fn create_publish_packet(&mut self, publish: HandlePublish) -> io::Result<Publish> {
-        let mut packet_id: u16 = 0;
+        let mut packet_id = None;
+        let mut qos_lvl = Qos::AtMostOnce;
         if publish.qos1_level {
             if let Some(id) = Client::find_key_for_value(self.packets_id.clone(), false) {
-                packet_id = id;
+                packet_id = Some(id);
                 self.packets_id.insert(id, true);
             } else {
                 let length = self.packets_id.len();
                 for i in length..length * 2 {
                     self.packets_id.insert(i as u16, false);
                 }
-                packet_id = length as u16;
-                self.packets_id.insert(packet_id, true);
+                let id = length as u16;
+                //packet_id = length as u16;
+                packet_id = Some(id);
+                self.packets_id.insert(id, true);
             }
-        }
-
-        let mut qos_lvl : Qos = Qos::AtMostOnce;
-        if publish.qos1_level {
             qos_lvl = Qos::AtLeastOnce;
-        } else {
-            qos_lvl = Qos::AtMostOnce;
         }
-
-        let packet_id_send = match packet_id {
-            0 => None,
-            _ => Some(packet_id),
-        };
 
         let publish_packet = Publish::new(
             PublishFlags {duplicate: false, qos_level: qos_lvl, retain: publish.retain },
-            publish.topic, packet_id_send, publish.app_msg,
+            publish.topic, packet_id, publish.app_msg,
         );
 
         Ok(publish_packet)

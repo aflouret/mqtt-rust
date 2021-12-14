@@ -8,7 +8,6 @@ use common::all_packets::unsuback::Unsuback;
 use common::all_packets::unsubscribe::Unsubscribe;
 use common::packet::{Packet, Qos};
 use std::collections::HashMap;
-use std::time::Duration;
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex, mpsc};
@@ -134,10 +133,20 @@ impl PacketProcessor {
         if let Some(_) = session.last_will_msg {
             // Mandamos el publish con el last will msg al last will topic
             let mut p = None;
+            if let Some(level) = session.last_will_qos {
+                if level == Qos::AtLeastOnce {
+                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                        p = Some(packet_id);
+                        self.packets_id.insert(packet_id, true);
+                    }
+                }
+            }
+            /*
             if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
                 p = Some(packet_id);
                 self.packets_id.insert(packet_id, true);
             }
+            */
             
             // Mandamos el publish a los suscriptores 
             //TODO: solo hacer si es que hay last will
