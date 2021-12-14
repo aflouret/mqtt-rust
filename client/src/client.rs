@@ -1,5 +1,5 @@
 use common::all_packets::connect::{Connect, ConnectPayload};
-use common::all_packets::connack::Connack;
+use common::all_packets::connack::{Connack, CONNACK_CONNECTION_ACCEPTED};
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::pingreq::Pingreq;
 use std::time::Duration;
@@ -106,9 +106,12 @@ impl Client {
             loop {
                 let receiver_packet = Packet::read_from(&mut s);
                 match receiver_packet {
-                    Ok(Packet::Connack(_connack)) => {
+                    Ok(Packet::Connack(connack)) => {
                         println!("CLIENT: CONNACK packet successful received");
                         // sender.send("PONG".to_string());
+                        if connack.connect_return_code != CONNACK_CONNECTION_ACCEPTED {
+                            s.shutdown(Shutdown::Both).unwrap();
+                        }
                     }
                     Ok(Packet::Puback(_puback)) => {
                         println!("CLIENT: PUBACK packet successful received");

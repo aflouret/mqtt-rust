@@ -2,7 +2,7 @@ use crate::session::Session;
 use crate::topic_filters;
 use crate::puback_processor::PubackProcessor;
 use crate::authenticator::Authenticator;
-use common::all_packets::connack::{Connack, CONNACK_BAD_USERNAME_OR_PASSWORD};
+use common::all_packets::connack::{Connack, CONNACK_BAD_USERNAME_OR_PASSWORD, CONNACK_CONNECTION_ACCEPTED};
 use common::all_packets::connect::Connect;
 use common::all_packets::unsuback::Unsuback;
 use common::all_packets::unsubscribe::Unsubscribe;
@@ -53,6 +53,7 @@ impl PacketProcessor {
         for i in 0..PACKETS_ID {
             packets.insert(i, false);
         }
+        let authenticator = Authenticator::from("accounts.txt".to_string()).unwrap();
         PacketProcessor {
             sessions: HashMap::<String, Session>::new(),
             rx,
@@ -63,7 +64,7 @@ impl PacketProcessor {
             retained_messages: HashMap::<String, Message>::new(),
             packets_id: packets,
             //qos_1_senders: HashMap::<u16, Sender<()>>::new(),
-            authenticator: Authenticator::from("accounts.txt".to_string()).unwrap(),
+            authenticator: authenticator,
         }
     }
 
@@ -213,7 +214,18 @@ impl PacketProcessor {
         };
 
         if let Some(response_packet) = response_packet {
-            self.send_packet_to_client_handler(c_h_id, response_packet);
+            //Si es un Ok(Packet::Connack(connack)) con return code != 0, se envia el connack y se procede a desconectar al cliente
+            match &response_packet{
+                Ok(Packet::Connack(connack)) => {
+                    let conn = connack.clone();
+                    self.send_packet_to_client_handler(c_h_id, response_packet);
+                    if conn.connect_return_code != CONNACK_CONNECTION_ACCEPTED {
+                        self.handle_disconnect(c_h_id);
+                    }
+                }
+                _ => self.send_packet_to_client_handler(c_h_id, response_packet)
+            }
+            //self.send_packet_to_client_handler(c_h_id, response_packet);
         }
 
         Ok(())
