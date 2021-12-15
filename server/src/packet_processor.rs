@@ -15,8 +15,7 @@ use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use common::logging::logger::{Logger, LogMessage};
-use common::all_packets::suback::{Suback, SubackReturnCode, SUCCESS_MAX_QOS_0};
-use common::all_packets::suback::SubackReturnCode::SuccessAtMostOnce;
+use common::all_packets::suback::{Suback, SubackReturnCode};
 use common::all_packets::subscribe::Subscribe;
 use common::all_packets::pingreq::Pingreq;
 use common::all_packets::pingresp::Pingresp;
@@ -227,12 +226,12 @@ impl PacketProcessor {
             match &response_packet{
                 Ok(Packet::Connack(connack)) => {
                     let conn = connack.clone();
-                    self.send_packet_to_client_handler(c_h_id, response_packet);
+                    self.send_packet_to_client_handler(c_h_id, response_packet)?;
                     if conn.connect_return_code != CONNACK_CONNECTION_ACCEPTED {
                         self.handle_disconnect(c_h_id);
                     }
                 }
-                _ => self.send_packet_to_client_handler(c_h_id, response_packet)
+                _ => self.send_packet_to_client_handler(c_h_id, response_packet)?
             }
             //self.send_packet_to_client_handler(c_h_id, response_packet);
         }
@@ -283,8 +282,23 @@ impl PacketProcessor {
         // Mandamos los unacknowledged_messages que haya, si los hay, en la session
         let mut unacknowledged_messages_copy = current_session.unacknowledged_messages.clone();
         // (Sólo nos quedamos con los packets que recién dieron error al mandarlos de vuelta)
+        /*
         unacknowledged_messages_copy.retain(|publish| self.handle_publish_packet(publish.clone()).is_err() );
         self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
+        */
+
+
+        //send_packet_to_client_handler
+        if let Some(id) = current_session.get_client_handler_id(){
+            //unacknowledged_messages_copy.retain(|publish| self.handle_publish_packet(publish.clone()).is_err());
+            unacknowledged_messages_copy.retain(
+                |publish| self.send_packet_to_client_handler(id, Ok(Packet::Publish(publish.clone()))).is_err()
+            );
+        }
+
+
+
+
 
         // Enviamos el connack con 0 return code y el correspondiente flag de session_present:
         // si hay clean_session, session_present debe ser false. Sino, depende de si ya teníamos sesión
@@ -324,8 +338,8 @@ impl PacketProcessor {
     pub fn handle_subscribe_packet(&mut self, subscribe_packet: Subscribe, c_h_id: u32) -> Result<Suback, Box<dyn std::error::Error>> {
         println!("Se recibió el subscribe packet");
 
-        let mut client_id = self.get_client_id_from_handler_id(c_h_id);
-        let mut session;
+        let client_id = self.get_client_id_from_handler_id(c_h_id);
+        let session;
         if let Some(client_id) = client_id {
             session = self.sessions.get_mut(&client_id).unwrap();
         } else {
@@ -494,11 +508,12 @@ impl PacketProcessor {
         None
     }
 
-    fn send_packet_to_client_handler(&self, c_h_id: u32, packet: Result<Packet, Box<dyn std::error::Error + Send>>) {
+    fn send_packet_to_client_handler(&self, c_h_id: u32, packet: Result<Packet, Box<dyn std::error::Error + Send>>) -> Result<(), Box<dyn std::error::Error>>{
         let senders_hash = self.senders_to_c_h_writers.read().unwrap();
         let sender = senders_hash.get(&c_h_id).unwrap();
         let sender_mutex_guard = sender.lock().unwrap();
-        sender_mutex_guard.send(packet).unwrap();
+        sender_mutex_guard.send(packet)?;
+        Ok(())
     }
 
     fn find_key_for_value(map: HashMap<u16, bool>, value: bool) -> Option<u16> {
