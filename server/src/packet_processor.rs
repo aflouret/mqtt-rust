@@ -419,8 +419,6 @@ impl PacketProcessor {
     fn handle_publish_packet_qos1(&mut self, publish_packet: Publish) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
         let packet_id = publish_packet.packet_id;
 
-
-
         let mut publish_send = publish_packet.clone();
         publish_send.flags.duplicate = false;
         publish_send.flags.retain = false;
@@ -432,6 +430,7 @@ impl PacketProcessor {
         }
 
         for (_, session) in &self.sessions {
+            /*
             if session.is_subscribed_to(&publish_packet.topic_name) == Some(Qos::AtLeastOnce) {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
                     if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
@@ -441,6 +440,31 @@ impl PacketProcessor {
                     self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
                     self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send.clone())))).unwrap();
                 }
+            }
+            */
+            match session.is_subscribed_to(&publish_packet.topic_name){
+                Some(Qos::AtLeastOnce) => {
+                    if let Some(client_handler_id) = session.get_client_handler_id() {
+                        let mut publish_send_2 = publish_send.clone();
+                        if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                            publish_send_2.packet_id = Some(packet_id);
+                            self.packets_id.insert(packet_id, true);
+                        }
+                        self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())));
+                        self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send_2.clone())))).unwrap();
+                    }
+                },
+
+                Some(Qos::AtMostOnce) => {
+                    if let Some(client_handler_id) = session.get_client_handler_id() {
+                        let mut publish_send_2 = publish_send.clone();
+                        publish_send_2.packet_id = None;
+                        publish_send_2.flags.qos_level = Qos::AtMostOnce;
+                        self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())));
+                    }
+                },
+
+                _ => ()
             }
         }
 

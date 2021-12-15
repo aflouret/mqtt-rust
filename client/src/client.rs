@@ -126,13 +126,18 @@ impl Client {
                         println!("CLIENT: UNSUBACK packet successful received");
                     }
                     Ok(Packet::Publish(publish)) => {
-                        println!("CLIENT: Recibi publish: msg: {:?}", &publish.application_message);
+                        println!("CLIENT: Recibi publish: msg: {:?}, qos: {}", &publish.application_message, publish.flags.qos_level as u8);
                         if let Some(id) = publish.packet_id {
                             let puback = Puback::new(id);
                             puback.write_to(&mut s);
                         }
                         //let packet_id_pub = publish.packet_id.unwrap();
-                        subscriptions_msg.push(publish.application_message.to_string() + " - topic:" + &*publish.topic_name.to_string() + " \n");
+                        //subscriptions_msg.push(publish.application_message.to_string() + " - topic:" + &*publish.topic_name.to_string() + " \n");
+                        subscriptions_msg.push(
+                            //publish.application_message.to_string() + " - topic:" + &*publish.topic_name.to_string() + " \n"
+                            "Topic: ".to_string() + &publish.topic_name.to_string() + &" - ".to_string() + &publish.application_message.to_string() +
+                            &" - Qos: ".to_string() + &(publish.flags.qos_level as u8).to_string() + " \n"
+                        );
                         let response = ResponseHandlers::PublishResponse(PublishResponse::new(publish, subscriptions_msg.clone(), "Published Succesfull".to_string()));
                         sender.send(response);
                         /*
