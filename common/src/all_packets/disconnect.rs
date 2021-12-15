@@ -5,7 +5,7 @@ use crate::parser::{decode_remaining_length, encode_remaining_length};
 const DISCONNECT_REMAINING_LENGTH: u32 = 0;
 pub const DISCONNECT_PACKET_TYPE: u8 = 0xe0;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Disconnect;
 
 impl Disconnect {

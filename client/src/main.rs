@@ -33,12 +33,12 @@ fn main() {
     application.connect_activate(|app| {
         let (sender_conection, recv_conection) = mpsc::channel::<EventHandlers>();
         let (client_sender, window_recv) = mpsc::channel::<ResponseHandlers>();
-        thread::spawn(move || {
-            let client = Client::new("User".to_owned()); 
-            client.start_client(recv_conection, client_sender).unwrap();
-        });
         let builder = build_ui(app);
         setup(builder, sender_conection.clone(), window_recv);
+        thread::spawn(move || {
+            let client = Client::new("User".to_owned()); 
+            client.start_client(recv_conection, client_sender, sender_conection).unwrap();
+        });
     });
 
     application.run();
@@ -62,7 +62,6 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
     handle_subscribe_tab(builder.clone(), sender_conec.clone());
     handle_unsubscribe(builder.clone(), sender_conec);
     let (intern_sender, intern_recv) = glib::MainContext::channel::<ResponseHandlers>(glib::PRIORITY_DEFAULT);
-    //let (intern_sender, intern_recv) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
     thread::spawn(move || {
         loop {
