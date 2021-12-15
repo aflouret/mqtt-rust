@@ -13,8 +13,9 @@ use std::{io, thread};
 use std::collections::HashMap;
 use common::all_packets::puback::Puback;
 use common::all_packets::subscribe::Subscribe;
+use common::packet::Packet::Suback;
+use crate::handlers::{EventHandlers, HandleDisconnect, HandleInternPacketId, HandlePublish, HandleSubscribe, HandleUnsubscribe};
 use common::packet::{SOCKET_CLOSED_ERROR_MSG};
-use crate::handlers::{EventHandlers, HandleDisconnect, HandlePublish, HandleSubscribe, HandleUnsubscribe};
 use crate::HandleConection;
 use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 
@@ -75,26 +76,30 @@ impl Client {
             if keep_alive_sec == 0 {
                 keep_alive_sec = MAX_KEEP_ALIVE;
             }
-            
+
             match recv_connection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
                 Ok(EventHandlers::HandleConection(conec)) => {
                     self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
                 }
 
-                Ok(EventHandlers::HandlePublish(publish)) => {
-                    //escuchar el pbuack processor para reenviar publish
-                    self.handle_publish(publish).unwrap();
-                }
-                Ok(EventHandlers::HandleSubscribe(subscribe)) => {
-                    self.handle_subscribe(subscribe).unwrap();
-                }
-                Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
-                    self.handle_unsubscribe(unsubs).unwrap();
-                }
-                Ok(EventHandlers::HandleDisconnect(disconnect)) => {
-                    self.handle_disconnect(disconnect).unwrap();
-                    return Ok(())
-                }
+                    Ok(EventHandlers::HandlePublish(publish)) => {
+                        //escuchar el pbuack processor para reenviar publish
+                        self.handle_publish(publish).unwrap();
+                    }
+                    Ok(EventHandlers::HandleSubscribe(subscribe)) => {
+                        self.handle_subscribe(subscribe).unwrap();
+                    }
+                    Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
+                        self.handle_unsubscribe(unsubs).unwrap();
+                    }
+                    Ok(EventHandlers::HandleDisconnect(disconnect)) => {
+                        self.handle_disconnect(disconnect).unwrap();
+                    }
+                    Ok(EventHandlers::HandleInternPacketId(intern)) => {
+                        let packet_id = intern.packet_id;
+                        self.packets_id.insert(packet_id, false); //packet id puesto en false, que no se está usando
+                        println!("CLIENT: Packet id: {:?} liberado correctamente", &packet_id);
+                    }
 
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     self.handle_pingreq().unwrap();
@@ -107,12 +112,12 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_response(mut s: TcpStream, sender: Sender<ResponseHandlers>){
+    pub fn handle_response(mut s: TcpStream, sender: Sender<ResponseHandlers>, sender_ev_handlers: Sender<EventHandlers>) {
         let mut subscriptions_msg: Vec<String> = Vec::new();
         thread::spawn(move || {
             loop {
                 let receiver_packet = Packet::read_from(&mut s);
-                
+
                 match receiver_packet {
                     Ok(Packet::Connack(connack)) => {
                         println!("CLIENT: CONNACK packet successful received");
@@ -122,17 +127,22 @@ impl Client {
                         // Como llegó el Connack, listo, "deshacemos" el read_timeout del socket
                         s.set_read_timeout(Some(Duration::new(u64::from(MAX_KEEP_ALIVE) * 2, 0))).unwrap();
                     }
-                    Ok(Packet::Puback(_puback)) => {
+                    Ok(Packet::Puback(puback)) => {
                         println!("CLIENT: PUBACK packet successful received");
                         let puback_response = ResponseHandlers::PubackResponse(PubackResponse::new("PubackResponse".to_string()));
                         sender.send(puback_response);
                         thread::sleep(Duration::new(2,0));
                         sender.send(ResponseHandlers::PubackResponse(PubackResponse::new("".to_string())));
+                        let intern = EventHandlers::HandleInternPacketId(HandleInternPacketId::new(puback.packet_id));
+                        sender_ev_handlers.send(intern);
+                        println!("CLIENT: Packet id enviado internamente para liberar");
                         //sender.send("Topic Successfully published".to_string());
                         //mandar via channel el puback al puback processor,
                     }
-                    Ok(Packet::Suback(_suback)) => {
+                    Ok(Packet::Suback(suback)) => {
                         println!("CLIENT: SUBACK packet successful received");
+                        let intern = EventHandlers::HandleInternPacketId(HandleInternPacketId::new(suback.packet_id));
+                        sender_ev_handlers.send(intern);
                         //liberar el packet id que nos mandan
                     }
                     Ok(Packet::Unsuback(_unsuback)) => {
@@ -161,7 +171,7 @@ impl Client {
                     Ok(Packet::Pingresp(_pingresp)) => {
                         println!("CLIENT: Pingresp successful received");
                     }
-                    Err(e) => { 
+                    Err(e) => {
                         match e.to_string().as_str() {
                             SOCKET_CLOSED_ERROR_MSG => { // Causado por el Disconnect
                                 println!("Se desconecta por socket cerrado");
@@ -171,9 +181,9 @@ impl Client {
                                 s.shutdown(Shutdown::Both).unwrap();
                                 std::process::exit(1);
                             }
-                        }  
+                        }
                         break;
-                    }        
+                    }
                     _ => ()
                 };
             }
@@ -219,7 +229,7 @@ impl Client {
     pub fn handle_subscribe(&mut self, subscribe: HandleSubscribe) -> io::Result<()> {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
-            let subscribe_packet = Client::create_subscribe_packet(subscribe).unwrap();
+            let subscribe_packet = self.create_subscribe_packet(subscribe).unwrap();
             println!("CLIENT: Send subscribe packet: {:?}", &subscribe_packet);
             subscribe_packet.write_to(&mut s);
         }
@@ -227,8 +237,20 @@ impl Client {
         Ok(())
     }
 
-    pub fn create_subscribe_packet(subscribe: HandleSubscribe) -> io::Result<Subscribe> {
-        let mut subscribe_packet = Subscribe::new(10);
+    pub fn create_subscribe_packet(&mut self, subscribe: HandleSubscribe) -> io::Result<Subscribe> {
+        let mut packet_id: u16 = 0;
+        if let Some(id) = Client::find_key_for_value(self.packets_id.clone(), false) {
+            packet_id = id;
+            self.packets_id.insert(id, true);
+        } else {
+            let length = self.packets_id.len();
+            for i in length..length * 2 {
+                self.packets_id.insert(i as u16, false);
+            }
+            packet_id = length as u16;
+            self.packets_id.insert(packet_id, true);
+        }
+        let mut subscribe_packet = Subscribe::new(packet_id);
         subscribe_packet.add_subscription(Subscription { topic_filter: subscribe.topic, max_qos: subscribe.qos });
 
         Ok(subscribe_packet)
@@ -261,40 +283,51 @@ impl Client {
                 packet_id = Some(id);
                 self.packets_id.insert(id, true);
             }
-            qos_lvl = Qos::AtLeastOnce;
         }
+
+        let mut qos_lvl : Qos = Qos::AtMostOnce;
+        if publish.qos1_level {
+            qos_lvl = Qos::AtLeastOnce;
+        } else {
+            qos_lvl = Qos::AtMostOnce;
+        }
+
+        let packet_id_send = match packet_id {
+            0 => None,
+            _ => Some(packet_id),
+        };
 
         let publish_packet = Publish::new(
             PublishFlags {duplicate: false, qos_level: qos_lvl, retain: publish.retain },
-            publish.topic, packet_id, publish.app_msg,
+            publish.topic, packet_id_send, publish.app_msg,
         );
 
         Ok(publish_packet)
     }
 
-    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16) -> io::Result<()> {
+    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16, sender_ev_handlers: Sender<EventHandlers>) -> io::Result<()> {
         let address = conec.get_address();
         let mut socket = TcpStream::connect(address.clone()).unwrap();
         let keep_alive_time = conec.keep_alive_second.parse().unwrap();
         println!("Connecting to: {:?}", address);
-        
+
         let connect_packet = Connect::new(
-            ConnectPayload::new(conec.client_id, 
+            ConnectPayload::new(conec.client_id,
                 conec.last_will_topic,
-                conec.last_will_msg, 
+                conec.last_will_msg,
                 conec.username, conec.password),
                 keep_alive_time,
-            conec.clean_session, 
-            conec.last_will_retain, 
+            conec.clean_session,
+            conec.last_will_retain,
             conec.last_will_qos);
-        
 
-        let mut max_wait_time_for_connack = MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE; 
+
+        let mut max_wait_time_for_connack = MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE;
         if keep_alive_time != 0 {
             max_wait_time_for_connack = u64::from(keep_alive_time) * 2;
-        } 
+        }
         socket.set_read_timeout(Some(Duration::new(max_wait_time_for_connack, 0))).unwrap();
-        
+
         Client::handle_response(socket.try_clone().unwrap(), sender_to_window);
 
         *keep_alive_sec = keep_alive_time.clone();
@@ -304,9 +337,9 @@ impl Client {
         Ok(())
     }
 
-    fn find_key_for_value(map: HashMap<u16, bool>, value: bool) -> Option<u16> {
+    fn find_key_for_value(map: HashMap<u16, bool>, value_to_look: bool) -> Option<u16> {
         for (key, value) in map {
-            if value == false {
+            if value == value_to_look {
                 return  Some(key);
             }
         }
