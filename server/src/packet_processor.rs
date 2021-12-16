@@ -299,7 +299,6 @@ impl PacketProcessor {
         self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
         */
 
-        
         //send_packet_to_client_handler
         if let Some(id) = current_session.get_client_handler_id(){
             //unacknowledged_messages_copy.retain(|publish| self.handle_publish_packet(publish.clone()).is_err());
@@ -307,8 +306,7 @@ impl PacketProcessor {
                 |publish| self.send_packet_to_client_handler(id, Ok(Packet::Publish(publish.clone()))).is_err()
             );
         }
-
-        //self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
+        self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
         
 
         // Enviamos el connack con 0 return code y el correspondiente flag de session_present:
@@ -462,26 +460,13 @@ impl PacketProcessor {
         }
 
         for (_, session) in &self.sessions {
-            /*
-            if session.is_subscribed_to(&publish_packet.topic_name) == Some(Qos::AtLeastOnce) {
-                if let Some(client_handler_id) = session.get_client_handler_id() {
-                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
-                        publish_send.packet_id = Some(packet_id);
-                        self.packets_id.insert(packet_id, true);
-                    }
-                    self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
-                    self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send.clone())))).unwrap();
-                }
-            }
-            */
             match session.is_subscribed_to(&publish_packet.topic_name){
                 Some(Qos::AtLeastOnce) => {
                     if let Some(client_handler_id) = session.get_client_handler_id() {
                         let mut publish_send_2 = publish_send.clone();
-                        if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
-                            publish_send_2.packet_id = Some(packet_id);
-                            self.packets_id.insert(packet_id, true);
-                        }
+                        publish_send_2.packet_id = packet_id;
+                        self.packets_id.insert(packet_id.unwrap(), true);
+                        
                         self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())));
                         self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send_2.clone())))).unwrap();
                     }
@@ -511,7 +496,9 @@ impl PacketProcessor {
 
         for (_, session) in &mut self.sessions {
             if session.is_active() {
-                session.unacknowledged_messages.retain(|publish_packet| publish_packet.packet_id.unwrap() != puback_packet_id)
+                session.unacknowledged_messages.retain(|publish_packet| {
+                    println!("packetid_publish: {:?} || packetid_puback: {:?}",publish_packet.packet_id.unwrap(), puback_packet_id);
+                    publish_packet.packet_id.unwrap() != puback_packet_id})
             }
         }
 

@@ -24,7 +24,6 @@ impl Authenticator {
                 return Err(Error::new(ErrorKind::Other, "Incorrect format"));
             }
 
-            println!("Username: {}, Password: {}", vec.get(0).unwrap(), vec.get(1).unwrap());
             if hash.contains_key(&vec.get(0).unwrap().to_string()){
                 return Err(Error::new(ErrorKind::Other, "Username already in use"));
             }
