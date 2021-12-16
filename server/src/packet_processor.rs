@@ -370,14 +370,19 @@ impl PacketProcessor {
             }
 
             //Retain Logic Subscribe
-            if let Some(message) = self.retained_messages.keys().find(|topic|
+            if let Some(topic) = self.retained_messages.keys().find(|topic|
                 topic_filters::filter_matches_topic(&subscription.topic_filter, topic)
             ) {
 
                 let mut flags = 0b0011_0001;
-                let mut packet_id = None;
-                if subscription.max_qos == Qos::AtLeastOnce{
-                    packet_id = Some(1);
+                let mut id = None;
+                if subscription.max_qos == Qos::AtLeastOnce && self.retained_messages.get(topic).unwrap().qos == Qos::AtLeastOnce{
+                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                        self.packets_id.insert(packet_id, true);
+                        id = Some(packet_id); 
+                    }
+                    
+                    
                     flags = 0b0011_0011;
                 }    
 
@@ -385,8 +390,8 @@ impl PacketProcessor {
                 let publish_packet = Publish::new(
                     PublishFlags::new(flags),
                     subscription.topic_filter,
-                    packet_id,
-                    self.retained_messages.get(message).unwrap().message.to_string(),
+                    id,
+                    self.retained_messages.get(topic).unwrap().message.to_string(),
                 );
                 println!("Publish a mandar: {:?}", &publish_packet);
 
