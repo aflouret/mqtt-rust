@@ -105,6 +105,7 @@ impl Client {
         thread::spawn(move || {
             loop {
                 let receiver_packet = Packet::read_from(&mut s);
+                
                 match receiver_packet {
                     Ok(Packet::Connack(connack)) => {
                         println!("CLIENT: CONNACK packet successful received");
@@ -148,8 +149,9 @@ impl Client {
                     Ok(Packet::Pingresp(_pingresp)) => {
                         println!("CLIENT: Pingresp successful received");
                     }
-                    Err(_) => {
+                    Err(_) => { //Por ej. si no se recibió el Connack a tiempo luego de mandar el Connect
                         println!("Socket cerrado");
+                        // TODO: NO SE ESTA CERRANDO EL CLIENTE. SIGUE MANDANDO PINGREQS
                         break;
                     }    
                     _ => ()
@@ -255,7 +257,11 @@ impl Client {
         let address = conec.get_address();
         let mut socket = TcpStream::connect(address.clone()).unwrap();
         println!("Connecting to: {:?}", address);
-        let connect_packet = Connect::new(ConnectPayload::new(conec.client_id, conec.last_will_topic, conec.last_will_msg, conec.username, conec.password), 3000, conec.clean_session, conec.last_will_retain, conec.last_will_qos);
+        
+        let connect_packet = Connect::new(ConnectPayload::new(conec.client_id, conec.last_will_topic, conec.last_will_msg, conec.username, conec.password), conec.keep_alive_second.parse().unwrap(), conec.clean_session, conec.last_will_retain, conec.last_will_qos);
+        // Si no se recibe un connack 2 * keep_alive segs luego de mandar el connect, desconectar el cliente
+        socket.set_read_timeout(Some(Duration::from_millis(1000 * conec.keep_alive_second.parse::<u64>().unwrap() * 2))).unwrap();
+        
         Client::handle_response(socket.try_clone().unwrap(), sender_to_window);
         *keep_alive_sec = connect_packet.keep_alive_seconds.clone();
         println!("CLIENT: Send connect packet: {:?}", &connect_packet);
