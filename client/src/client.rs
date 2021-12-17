@@ -20,6 +20,7 @@ use crate::HandleConection;
 use crate::response::{PublishResponse, ResponseHandlers};
 
 const MAX_KEEP_ALIVE: u16 = 65000;
+const MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE: u64 = 10;
 // KeepAlive muy grande para el caso que keep_alive es 0 => en este caso el server no espera ningun tiempo para que el client envíe paquetes.
 const PACKETS_ID: u16 = 100;
 
@@ -261,6 +262,7 @@ impl Client {
     pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16) -> io::Result<()> {
         let address = conec.get_address();
         let mut socket = TcpStream::connect(address.clone()).unwrap();
+        let keep_alive_time = conec.keep_alive_second.parse().unwrap();
         println!("Connecting to: {:?}", address);
         
         let connect_packet = Connect::new(
@@ -268,16 +270,21 @@ impl Client {
                 conec.last_will_topic,
                 conec.last_will_msg, 
                 conec.username, conec.password),
-            conec.keep_alive_second.parse().unwrap(),
+                keep_alive_time,
             conec.clean_session, 
             conec.last_will_retain, 
             conec.last_will_qos);
+        
 
-        // Si no se recibe un connack hasta 2 * keep_alive segs luego de mandar el connect, desconectar el cliente
-        socket.set_read_timeout(Some(Duration::from_millis(1000 * conec.keep_alive_second.parse::<u64>().unwrap() * 2))).unwrap();
+        let mut max_wait_time_for_connack = MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE; 
+        if keep_alive_time != 0 {
+            max_wait_time_for_connack = u64::from(keep_alive_time) * 2;
+        } 
+        socket.set_read_timeout(Some(Duration::new(max_wait_time_for_connack, 0))).unwrap();
         
         Client::handle_response(socket.try_clone().unwrap(), sender_to_window);
-        *keep_alive_sec = connect_packet.keep_alive_seconds.clone();
+
+        *keep_alive_sec = keep_alive_time.clone();
         println!("CLIENT: Send connect packet: {:?}", &connect_packet);
         connect_packet.write_to(&mut socket);
         self.set_server_stream(socket);
