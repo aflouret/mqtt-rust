@@ -75,7 +75,6 @@ impl PacketProcessor {
                 puback_processor.run();
             });
 
-            //thread::sleep(std::time::Duration::from_millis(100000000000));
             loop {
                 if let Ok((c_h_id, packet)) = self.rx.recv() {
                     match packet {

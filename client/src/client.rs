@@ -96,7 +96,7 @@ impl Client {
                         // así que el recv falla y no entra en el if.
                         if let Ok(_error) = connection_shutdown_rx.recv_timeout(std::time::Duration::new(2,0)) {
                             println!("Apagando cliente");
-                            break;
+                            std::process::exit(1); // Cerramos el programa
                         }
                         self.handle_pingreq().unwrap();
                     }
