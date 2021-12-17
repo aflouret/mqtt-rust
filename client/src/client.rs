@@ -1,8 +1,7 @@
 use common::all_packets::connect::{Connect, ConnectPayload};
-use common::all_packets::connack::{Connack, CONNACK_CONNECTION_ACCEPTED};
+use common::all_packets::connack::{CONNACK_CONNECTION_ACCEPTED};
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::pingreq::Pingreq;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use common::packet::{Packet, Qos, Subscription};
@@ -14,7 +13,7 @@ use std::{io, thread};
 use std::collections::HashMap;
 use common::all_packets::puback::Puback;
 use common::all_packets::subscribe::Subscribe;
-use common::packet::Packet::Suback;
+use common::packet::{SOCKET_CLOSED_ERROR_MSG};
 use crate::handlers::{EventHandlers, HandleDisconnect, HandlePublish, HandleSubscribe, HandleUnsubscribe};
 use crate::HandleConection;
 use crate::response::{PublishResponse, ResponseHandlers};
@@ -27,20 +26,18 @@ const PACKETS_ID: u16 = 100;
 
 #[derive(Debug)]
 pub struct Client {
-    client_id: String,
     server_stream: Option<TcpStream>,
     packets_id: HashMap<u16, bool>,
 }
 
 impl Client {
     /// Devuelve un client con un socket no conectado.
-    pub fn new(client_id: String) -> Client {
+    pub fn new() -> Client {
         let mut packets: HashMap<u16, bool> = HashMap::new();
         for i in 0..PACKETS_ID {
             packets.insert(i, false);
         }
         Client {
-            client_id,
             server_stream: None,
             packets_id: packets,
         }
@@ -50,55 +47,62 @@ impl Client {
         self.server_stream = Some(stream);
     }
 
-    pub fn start_client(mut self, recv_conection: Receiver<EventHandlers>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
-        thread::spawn(move || {
-            let mut keep_alive_sec: u16 = 0;
+    pub fn start_client(mut self, recv_connection: Receiver<EventHandlers>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
+        let recv_connection = Arc::new(Mutex::new(recv_connection));
+        loop{
+            self.run_gui_processor(recv_connection.clone(), sender_to_window.clone())?;
+        }
+    }
 
-            loop {
-                if let Ok(conection) = recv_conection.recv() {
-                    match conection {
-                        EventHandlers::HandleConection(conec) => {
-                            self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
-                            println!("Connected Client");
-                            break;
-                        }
-                        _ => println!("Primero se debe conectar"),
-                    };
-                }
-            }
+    pub fn run_gui_processor(&mut self, recv_connection: Arc<Mutex<std::sync::mpsc::Receiver<EventHandlers>>>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
+        let recv_connection = recv_connection.lock().unwrap();
+        let mut keep_alive_sec: u16 = 0;
 
-            loop {
-                if keep_alive_sec == 0 {
-                    keep_alive_sec = MAX_KEEP_ALIVE;
-                }
-                match recv_conection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
-                    Ok(EventHandlers::HandleConection(conec)) => {
+        loop {
+            if let Ok(conection) = recv_connection.recv() {
+                match conection {
+                    EventHandlers::HandleConection(conec) => {
                         self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
-                        //println!("Client already connected"); //Revisar que hacer en este caso
+                        println!("Connected Client");
+                        break;
                     }
-
-                    Ok(EventHandlers::HandlePublish(publish)) => {
-                        //escuchar el pbuack processor para reenviar publish
-                        self.handle_publish(publish).unwrap();
-                    }
-                    Ok(EventHandlers::HandleSubscribe(subscribe)) => {
-                        self.handle_subscribe(subscribe).unwrap();
-                    }
-                    Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
-                        self.handle_unsubscribe(unsubs).unwrap();
-                    }
-                    Ok(EventHandlers::HandleDisconnect(disconnect)) => {
-                        self.handle_disconnect(disconnect).unwrap();
-                    }
-
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        self.handle_pingreq().unwrap();
-                    }
-
-                    _ => ()
+                    _ => println!("Primero se debe conectar"),
                 };
             }
-        });
+        }
+
+        loop {
+            if keep_alive_sec == 0 {
+                keep_alive_sec = MAX_KEEP_ALIVE;
+            }
+            
+            match recv_connection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
+                Ok(EventHandlers::HandleConection(conec)) => {
+                    self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
+                }
+
+                Ok(EventHandlers::HandlePublish(publish)) => {
+                    //escuchar el pbuack processor para reenviar publish
+                    self.handle_publish(publish).unwrap();
+                }
+                Ok(EventHandlers::HandleSubscribe(subscribe)) => {
+                    self.handle_subscribe(subscribe).unwrap();
+                }
+                Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
+                    self.handle_unsubscribe(unsubs).unwrap();
+                }
+                Ok(EventHandlers::HandleDisconnect(disconnect)) => {
+                    self.handle_disconnect(disconnect).unwrap();
+                    return Ok(())
+                }
+
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    self.handle_pingreq().unwrap();
+                }
+
+                _ => ()
+            };
+        }
 
         Ok(())
     }
@@ -112,7 +116,6 @@ impl Client {
                 match receiver_packet {
                     Ok(Packet::Connack(connack)) => {
                         println!("CLIENT: CONNACK packet successful received");
-                        // sender.send("PONG".to_string());
                         if connack.connect_return_code != CONNACK_CONNECTION_ACCEPTED {
                             s.shutdown(Shutdown::Both).unwrap();
                         }
@@ -154,12 +157,19 @@ impl Client {
                     Ok(Packet::Pingresp(_pingresp)) => {
                         println!("CLIENT: Pingresp successful received");
                     }
-                    Err(_) => { //Si no se recibió el Connack a tiempo luego de mandar el Connect
-                        println!("Socket cerrado");
-                        s.shutdown(Shutdown::Both).unwrap();
-                        println!("Apagando cliente");
-                        std::process::exit(1); // Cerramos el programa
-                    }    
+                    Err(e) => { 
+                        match e.to_string().as_str() {
+                            SOCKET_CLOSED_ERROR_MSG => { // Causado por el Disconnect
+                                println!("Se desconecta por socket cerrado");
+                            },
+                            _ => { // Causado por el read_timeout
+                                println!("Se cierra el cliente por no recibir el Connack a tiempo");
+                                s.shutdown(Shutdown::Both).unwrap();
+                                std::process::exit(1);
+                            }
+                        }  
+                        break;
+                    }        
                     _ => ()
                 };
             }
@@ -184,7 +194,6 @@ impl Client {
             let disconnect_packet = disconnect.disconnect_packet;
             println!("CLIENT: Send disconnect packet: {:?}", &disconnect_packet);
             disconnect_packet.write_to(&mut s).unwrap();
-            println!("escrito el disconnect");
             //TODO: cerrar la conexion
             socket.shutdown(Shutdown::Both).unwrap();
         }
