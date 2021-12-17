@@ -1,5 +1,6 @@
+use std::thread::JoinHandle;
 use std::{thread};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::sync::mpsc::{Receiver, Sender};
 use crate::client::Client;
 
@@ -28,6 +29,7 @@ mod response;
     //Sender: Client envía a Window , Recv: Window recibe data a mostrar
     let (sender_cli, recv_window) = mpsc::channel::<Packet>();
  */
+
 fn main() {
     let application = gtk::Application::new(None, Default::default());
     application.connect_activate(|app| {
@@ -106,6 +108,7 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
 
     ip_entry.set_text("127.0.0.1");
     port_entry.set_text("8080");
+    keep_alive_entry.set_text("300");
 
     let sender_for_disconnect = sender.clone();
     connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
