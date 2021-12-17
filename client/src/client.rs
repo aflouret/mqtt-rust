@@ -1,8 +1,7 @@
 use common::all_packets::connect::{Connect, ConnectPayload};
-use common::all_packets::connack::{Connack, CONNACK_CONNECTION_ACCEPTED};
+use common::all_packets::connack::{CONNACK_CONNECTION_ACCEPTED};
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::pingreq::Pingreq;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use common::packet::{Packet, Qos, Subscription};
@@ -14,32 +13,31 @@ use std::{io, thread};
 use std::collections::HashMap;
 use common::all_packets::puback::Puback;
 use common::all_packets::subscribe::Subscribe;
-use common::packet::Packet::Suback;
+use common::packet::{SOCKET_CLOSED_ERROR_MSG};
 use crate::handlers::{EventHandlers, HandleDisconnect, HandlePublish, HandleSubscribe, HandleUnsubscribe};
 use crate::HandleConection;
 use crate::response::{PublishResponse, ResponseHandlers};
 
 const MAX_KEEP_ALIVE: u16 = 65000;
+const MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE: u64 = 10;
 // KeepAlive muy grande para el caso que keep_alive es 0 => en este caso el server no espera ningun tiempo para que el client envíe paquetes.
 const PACKETS_ID: u16 = 100;
 
 
 #[derive(Debug)]
 pub struct Client {
-    client_id: String,
     server_stream: Option<TcpStream>,
     packets_id: HashMap<u16, bool>,
 }
 
 impl Client {
     /// Devuelve un client con un socket no conectado.
-    pub fn new(client_id: String) -> Client {
+    pub fn new() -> Client {
         let mut packets: HashMap<u16, bool> = HashMap::new();
         for i in 0..PACKETS_ID {
             packets.insert(i, false);
         }
         Client {
-            client_id,
             server_stream: None,
             packets_id: packets,
         }
@@ -49,67 +47,67 @@ impl Client {
         self.server_stream = Some(stream);
     }
 
-    pub fn start_client(mut self, recv_conection: Receiver<EventHandlers>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
-        thread::spawn(move || {
-            let mut keep_alive_sec: u16 = 0;
-            let connection_shutdown_rx;
+    pub fn start_client(mut self, recv_connection: Receiver<EventHandlers>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
+        let recv_connection = Arc::new(Mutex::new(recv_connection));
+        loop{
+            self.run_gui_processor(recv_connection.clone(), sender_to_window.clone())?;
+        }
+    }
 
-            loop {
-                if let Ok(conection) = recv_conection.recv() {
-                    match conection {
-                        EventHandlers::HandleConection(conec) => {
-                            connection_shutdown_rx = self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
-                            println!("Connected Client");
-                            break;
-                        }
-                        _ => println!("Primero se debe conectar"),
-                    };
-                }
-            }
+    pub fn run_gui_processor(&mut self, recv_connection: Arc<Mutex<std::sync::mpsc::Receiver<EventHandlers>>>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
+        let recv_connection = recv_connection.lock().unwrap();
+        let mut keep_alive_sec: u16 = 0;
 
-            loop {
-                if keep_alive_sec == 0 {
-                    keep_alive_sec = MAX_KEEP_ALIVE;
-                }
-                match recv_conection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
-                    Ok(EventHandlers::HandleConection(conec)) => {
+        loop {
+            if let Ok(conection) = recv_connection.recv() {
+                match conection {
+                    EventHandlers::HandleConection(conec) => {
                         self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
-                        //println!("Client already connected"); //Revisar que hacer en este caso
+                        println!("Connected Client");
+                        break;
                     }
-
-                    Ok(EventHandlers::HandlePublish(publish)) => {
-                        //escuchar el pbuack processor para reenviar publish
-                        self.handle_publish(publish).unwrap();
-                    }
-                    Ok(EventHandlers::HandleSubscribe(subscribe)) => {
-                        self.handle_subscribe(subscribe).unwrap();
-                    }
-                    Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
-                        self.handle_unsubscribe(unsubs).unwrap();
-                    }
-                    Ok(EventHandlers::HandleDisconnect(disconnect)) => {
-                        self.handle_disconnect(disconnect).unwrap();
-                    }
-
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        // Vemos si se debe a que el Connack no llegó. Si había llegado el connack, se cerró el channel
-                        // así que el recv falla y no entra en el if.
-                        if let Ok(_error) = connection_shutdown_rx.recv_timeout(std::time::Duration::new(2,0)) {
-                            println!("Apagando cliente");
-                            std::process::exit(1); // Cerramos el programa
-                        }
-                        self.handle_pingreq().unwrap();
-                    }
-
-                    _ => ()
+                    _ => println!("Primero se debe conectar"),
                 };
             }
-        });
+        }
+
+        loop {
+            if keep_alive_sec == 0 {
+                keep_alive_sec = MAX_KEEP_ALIVE;
+            }
+            
+            match recv_connection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
+                Ok(EventHandlers::HandleConection(conec)) => {
+                    self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
+                }
+
+                Ok(EventHandlers::HandlePublish(publish)) => {
+                    //escuchar el pbuack processor para reenviar publish
+                    self.handle_publish(publish).unwrap();
+                }
+                Ok(EventHandlers::HandleSubscribe(subscribe)) => {
+                    self.handle_subscribe(subscribe).unwrap();
+                }
+                Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
+                    self.handle_unsubscribe(unsubs).unwrap();
+                }
+                Ok(EventHandlers::HandleDisconnect(disconnect)) => {
+                    self.handle_disconnect(disconnect).unwrap();
+                    return Ok(())
+                }
+
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    self.handle_pingreq().unwrap();
+                }
+
+                _ => ()
+            };
+        }
 
         Ok(())
     }
 
-    pub fn handle_response(mut s: TcpStream, sender: Sender<ResponseHandlers>, mut connection_shutdown_tx: Option<Sender<Box<dyn std::error::Error + Send>>>){
+    pub fn handle_response(mut s: TcpStream, sender: Sender<ResponseHandlers>){
         let mut subscriptions_msg: Vec<String> = Vec::new();
         thread::spawn(move || {
             loop {
@@ -118,12 +116,11 @@ impl Client {
                 match receiver_packet {
                     Ok(Packet::Connack(connack)) => {
                         println!("CLIENT: CONNACK packet successful received");
-                        // sender.send("PONG".to_string());
                         if connack.connect_return_code != CONNACK_CONNECTION_ACCEPTED {
                             s.shutdown(Shutdown::Both).unwrap();
                         }
-                        // Si recibimos el Connack, listo, cerramos el channel dedicado para chequear eso
-                        connection_shutdown_tx = None;
+                        // Como llegó el Connack, listo, "deshacemos" el read_timeout del socket
+                        s.set_read_timeout(Some(Duration::new(u64::from(MAX_KEEP_ALIVE) * 2, 0))).unwrap();
                     }
                     Ok(Packet::Puback(_puback)) => {
                         println!("CLIENT: PUBACK packet successful received");
@@ -160,13 +157,19 @@ impl Client {
                     Ok(Packet::Pingresp(_pingresp)) => {
                         println!("CLIENT: Pingresp successful received");
                     }
-                    Err(_) => { //Por ej. si no se recibió el Connack a tiempo luego de mandar el Connect
-                        println!("Socket cerrado");
-                        s.shutdown(Shutdown::Both).unwrap();
-                        // Y le avisamos al listener de EventHandlers que se cierre
-                        connection_shutdown_tx.unwrap().send(Box::new(std::sync::mpsc::SendError("Socket Disconnect"))).unwrap();
+                    Err(e) => { 
+                        match e.to_string().as_str() {
+                            SOCKET_CLOSED_ERROR_MSG => { // Causado por el Disconnect
+                                println!("Se desconecta por socket cerrado");
+                            },
+                            _ => { // Causado por el read_timeout
+                                println!("Se cierra el cliente por no recibir el Connack a tiempo");
+                                s.shutdown(Shutdown::Both).unwrap();
+                                std::process::exit(1);
+                            }
+                        }  
                         break;
-                    }    
+                    }        
                     _ => ()
                 };
             }
@@ -191,7 +194,6 @@ impl Client {
             let disconnect_packet = disconnect.disconnect_packet;
             println!("CLIENT: Send disconnect packet: {:?}", &disconnect_packet);
             disconnect_packet.write_to(&mut s).unwrap();
-            println!("escrito el disconnect");
             //TODO: cerrar la conexion
             socket.shutdown(Shutdown::Both).unwrap();
         }
@@ -266,9 +268,10 @@ impl Client {
         Ok(publish_packet)
     }
 
-    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16) -> io::Result<std::sync::mpsc::Receiver<Box<dyn std::error::Error + Send>>> {
+    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16) -> io::Result<()> {
         let address = conec.get_address();
         let mut socket = TcpStream::connect(address.clone()).unwrap();
+        let keep_alive_time = conec.keep_alive_second.parse().unwrap();
         println!("Connecting to: {:?}", address);
         
         let connect_packet = Connect::new(
@@ -276,22 +279,25 @@ impl Client {
                 conec.last_will_topic,
                 conec.last_will_msg, 
                 conec.username, conec.password),
-            conec.keep_alive_second.parse().unwrap(),
+                keep_alive_time,
             conec.clean_session, 
             conec.last_will_retain, 
             conec.last_will_qos);
-
-        // Si no se recibe un connack hasta 2 * keep_alive segs luego de mandar el connect, desconectar el cliente
-        socket.set_read_timeout(Some(Duration::from_millis(1000 * conec.keep_alive_second.parse::<u64>().unwrap() * 2))).unwrap();
         
-        let  (connection_shutdown_tx, connection_shutdown_rx) = 
-            mpsc::channel::<Box<dyn std::error::Error + Send>>();
-        Client::handle_response(socket.try_clone().unwrap(), sender_to_window, Some(connection_shutdown_tx));
-        *keep_alive_sec = connect_packet.keep_alive_seconds.clone();
+
+        let mut max_wait_time_for_connack = MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE; 
+        if keep_alive_time != 0 {
+            max_wait_time_for_connack = u64::from(keep_alive_time) * 2;
+        } 
+        socket.set_read_timeout(Some(Duration::new(max_wait_time_for_connack, 0))).unwrap();
+        
+        Client::handle_response(socket.try_clone().unwrap(), sender_to_window);
+
+        *keep_alive_sec = keep_alive_time.clone();
         println!("CLIENT: Send connect packet: {:?}", &connect_packet);
         connect_packet.write_to(&mut socket);
         self.set_server_stream(socket);
-        Ok(connection_shutdown_rx)
+        Ok(())
     }
 
     fn find_key_for_value(map: HashMap<u16, bool>, value: bool) -> Option<u16> {

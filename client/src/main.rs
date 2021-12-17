@@ -33,14 +33,14 @@ mod response;
 fn main() {
     let application = gtk::Application::new(None, Default::default());
     application.connect_activate(|app| {
-        let (sender_conection, recv_conection) = mpsc::channel::<EventHandlers>();
+        let (sender_connection, recv_connection) = mpsc::channel::<EventHandlers>();
         let (client_sender, window_recv) = mpsc::channel::<ResponseHandlers>();
         thread::spawn(move || {
-            let client = Client::new("User".to_owned()); 
-            client.start_client(recv_conection, client_sender).unwrap();
+            let client = Client::new(); 
+            client.start_client(recv_connection, client_sender).unwrap();
         });
         let builder = build_ui(app);
-        setup(builder, sender_conection.clone(), window_recv);
+        setup(builder, sender_connection.clone(), window_recv);
     });
 
     application.run();
