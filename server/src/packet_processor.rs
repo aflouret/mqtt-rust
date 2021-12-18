@@ -329,7 +329,7 @@ impl PacketProcessor {
 
         let mut suback_packet = Suback::new(subscribe_packet.packet_id);
         for subscription in subscribe_packet.subscriptions {
-            if /*subscription_is_valid()*/true == false {
+            if topic_filters::topic_filter_is_valid(&subscription.topic_filter) == false {
                 let return_code = SubackReturnCode::Failure;
                 suback_packet.add_return_code(return_code);
             } else {
