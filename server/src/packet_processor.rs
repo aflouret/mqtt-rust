@@ -20,6 +20,7 @@ use common::all_packets::subscribe::Subscribe;
 use common::all_packets::pingreq::Pingreq;
 use common::all_packets::pingresp::Pingresp;
 use std::io::{Error, ErrorKind};
+use std::time::Duration;
 
 const PACKETS_ID: u16 = 100;
 
@@ -229,16 +230,7 @@ impl PacketProcessor {
                     if conn.connect_return_code != CONNACK_CONNECTION_ACCEPTED {
                         self.handle_disconnect(c_h_id);
                     } else {
-                        /*
-                        if let Some(client_id) = self.get_client_id_from_handler_id(c_h_id){
-                            let current_session = self.sessions.get_mut(&client_id).unwrap();
-                            let mut unacknowledged_messages_copy = current_session.unacknowledged_messages.clone();
-                            unacknowledged_messages_copy.retain(
-                                |publish| self.send_packet_to_client_handler(c_h_id, Ok(Packet::Publish(publish.clone()))).is_err()
-                            );
-                            
-                        }
-                        */
+                        self.send_unacknowledged_messages(c_h_id); 
                     }
                 }
                 _ => self.send_packet_to_client_handler(c_h_id, response_packet)?
@@ -288,25 +280,6 @@ impl PacketProcessor {
         }
         let current_session = self.sessions.get_mut(&client_id).unwrap();
         current_session.connect(client_handler_id);
-
-        
-        // Mandamos los unacknowledged_messages que haya, si los hay, en la session
-        let mut unacknowledged_messages_copy = current_session.unacknowledged_messages.clone();
-        // (Sólo nos quedamos con los packets que recién dieron error al mandarlos de vuelta)
-        /*
-        unacknowledged_messages_copy.retain(|publish| self.handle_publish_packet(publish.clone()).is_err() );
-        self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
-        */
-
-        //send_packet_to_client_handler
-        if let Some(id) = current_session.get_client_handler_id(){
-            //unacknowledged_messages_copy.retain(|publish| self.handle_publish_packet(publish.clone()).is_err());
-            unacknowledged_messages_copy.retain(
-                |publish| self.send_packet_to_client_handler(id, Ok(Packet::Publish(publish.clone()))).is_err()
-            );
-        }
-        self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
-        
 
         // Enviamos el connack con 0 return code y el correspondiente flag de session_present:
         // si hay clean_session, session_present debe ser false. Sino, depende de si ya teníamos sesión
@@ -394,6 +367,7 @@ impl PacketProcessor {
                 );
                 println!("Publish a mandar: {:?}", &publish_packet);
 
+                
                 let senders_hash = self.senders_to_c_h_writers.read().unwrap();
                 let sender = senders_hash.get(&c_h_id).unwrap();
                 let sender_mutex_guard = sender.lock().unwrap();
@@ -534,5 +508,22 @@ impl PacketProcessor {
             }
         }
         None
+    }
+
+    fn send_unacknowledged_messages(&mut self, c_h_id: u32){
+        if let Some(client_id) = self.get_client_id_from_handler_id(c_h_id){       
+
+            //thread::sleep(Duration::from_millis(100));
+        
+            let current_session = self.sessions.get_mut(&client_id).unwrap();
+            let mut unacknowledged_messages_copy = current_session.unacknowledged_messages.clone();
+            unacknowledged_messages_copy.retain(
+                |publish| {
+                    println!("Envio el publish: {:?}", publish.application_message);
+                    self.send_packet_to_client_handler(c_h_id, Ok(Packet::Publish(publish.clone()))).is_err()
+                }
+            );
+            self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
+        }
     }
 }
