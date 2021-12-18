@@ -7,7 +7,7 @@ const CONNACK_REMAINING_LENGTH: u32 = 2;
 pub const CONNACK_BAD_USERNAME_OR_PASSWORD: u8 = 0x04;
 pub const CONNACK_CONNECTION_ACCEPTED: u8 = 0x00;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Connack {
     pub session_present: bool,
     pub connect_return_code: u8,

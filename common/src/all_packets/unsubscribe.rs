@@ -6,7 +6,7 @@ pub const UNSUBSCRIBE_PACKET_TYPE: u8 = 0xa0;
 const UNSUBSCRIBE_FIRST_BYTE: u8 = 0xa2;
 const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Unsubscribe{
     pub topics: Vec<String>,
     pub packet_id: u16,
