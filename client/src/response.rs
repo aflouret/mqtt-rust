@@ -7,7 +7,6 @@ pub enum ResponseHandlers {
     ConnackResponse(ConnackResponse),
     SubackResponse(SubackResponse),
     PublishResponse(PublishResponse),
-    PubackResponse(PubackResponse),
 }
 
 
@@ -35,19 +34,6 @@ pub struct PublishResponse {
 impl PublishResponse {
     pub fn new(publish_packet: Publish, msgs: Vec<String>, msg_correct: String) -> Self {
         Self{publish_packet: publish_packet, msgs: msgs, msg_correct: msg_correct }
-    }
-
-}
-
-#[derive(Debug)]
-pub struct PubackResponse {
-    pub msg: String
-
-}
-
-impl PubackResponse {
-    pub fn new(msg: String) -> Self {
-        Self{msg: msg}
     }
 
 }

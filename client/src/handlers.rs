@@ -2,17 +2,15 @@ use common::all_packets::disconnect::Disconnect;
 use common::all_packets::unsubscribe::Unsubscribe;
 use common::packet::Qos;
 
-#[derive(Debug, Clone)]
 pub enum EventHandlers {
     HandleConection(HandleConection),
     HandlePublish(HandlePublish),
     HandleSubscribe(HandleSubscribe),
     HandleUnsubscribe(HandleUnsubscribe),
     HandleDisconnect(HandleDisconnect),
-    HandleInternPacketId(HandleInternPacketId)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HandleConection {
     pub address: String,
     pub client_id: String,
@@ -51,7 +49,7 @@ impl HandleConection {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HandlePublish {
     pub topic: String,
     pub app_msg: String,
@@ -67,7 +65,7 @@ impl HandlePublish {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HandleSubscribe {
     pub topic: String,
     pub qos: Qos,
@@ -85,7 +83,7 @@ impl HandleSubscribe {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HandleUnsubscribe {
     pub unsubscribe_packet: Unsubscribe,
 }
@@ -96,7 +94,7 @@ impl HandleUnsubscribe {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HandleDisconnect {
     pub disconnect_packet: Disconnect,
 }
@@ -105,16 +103,5 @@ impl HandleDisconnect {
     pub fn new(disconnect_packet: Disconnect) -> Self {
         println!("disconnect");
         Self { disconnect_packet: disconnect_packet }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct HandleInternPacketId {
-    pub packet_id: u16,
-}
-
-impl HandleInternPacketId {
-    pub fn new(packet_id: u16) -> Self {
-        Self { packet_id: packet_id }
     }
 }

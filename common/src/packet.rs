@@ -79,7 +79,7 @@ impl Packet {
         let mut indetifier_byte = [0u8; 1];
         let read_bytes = stream.read(&mut indetifier_byte)?;
         if read_bytes == 0 {
-            return Err("Socket desconectado".into());
+            return Err(SOCKET_CLOSED_ERROR_MSG.into());
         }
         match indetifier_byte[0] & PACKET_TYPE_BYTE {
             CONNECT_PACKET_TYPE => Connect::read_from(stream, indetifier_byte[0]),

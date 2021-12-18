@@ -1,10 +1,39 @@
 Servidor escuchando: 8080
+Connect Packet received from: 0
+Connack packet send it to: 0
+Subscribe Packet received from: 0
+Publish Packet received from: 0
 Connect Packet received from: 1
 Connack packet send it to: 1
-Publish Packet received from: 1
-Publish Packet received from: 1
-Publish Packet received from: 1
-Publish Packet received from: 1
-Publish Packet received from: 1
 Subscribe Packet received from: 1
 Puback Packet received from: 1
+Publish Packet received from: 1
+Puback Packet received from: 1
+Publish Packet received from: 1
+Puback Packet received from: 1
+Publish Packet received from: 1
+Puback Packet received from: 1
+Publish Packet received from: 0
+Publish Packet received from: 1
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Pingreq Packet received from: 0
+Disconnect Packet received from: 0
+Connect Packet received from: 2
+Connack packet send it to: 2
+Subscribe Packet received from: 2
+Puback Packet received from: 2
+Disconnect Packet received from: 2
