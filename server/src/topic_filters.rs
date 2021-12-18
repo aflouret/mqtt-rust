@@ -3,7 +3,7 @@ pub fn filter_matches_topic(filter: &str, topic_name: &str) -> bool {
     let filter_levels: Vec<&str> = filter.split('/').collect();
     let topic_name_levels: Vec<&str> = topic_name.split('/').collect();
 
-    if let Some(index)= filter.split('/').position(|l| l == "#") {
+    if let Some(index) = filter.split('/').position(|l| l == "#") {
         if index == 0 && topic_name_levels[0].starts_with('$') {
             return false;
         }
@@ -14,13 +14,13 @@ pub fn filter_matches_topic(filter: &str, topic_name: &str) -> bool {
 }
 
 fn match_levels(filter: &[&str], topic: &[&str]) -> bool {
-
     if filter.len() != topic.len() {
         return false;
     }
 
     for (pos, level) in filter.iter().enumerate() {
-        if (topic[pos] != *level && *level != "+") || (topic[pos].starts_with('$') && *level == "+") {
+        if (topic[pos] != *level && *level != "+") || (topic[pos].starts_with('$') && *level == "+")
+        {
             return false;
         }
     }
@@ -30,9 +30,10 @@ fn match_levels(filter: &[&str], topic: &[&str]) -> bool {
 pub fn topic_filter_is_valid(filter: &str) -> bool {
     let len = filter.len();
 
-    if (filter.contains('#') && filter.find('#') != Some(len-1)) ||
-    (filter.contains('#') && filter.len() > 1 && !filter[..len-1].ends_with('/')) {
-        return false
+    if (filter.contains('#') && filter.find('#') != Some(len - 1))
+        || (filter.contains('#') && filter.len() > 1 && !filter[..len - 1].ends_with('/'))
+    {
+        return false;
     }
 
     let filter_levels: Vec<&str> = filter.split('/').collect();
@@ -129,7 +130,7 @@ mod tests {
     fn test16() {
         assert!(filter_matches_topic("abc/+", "abc/def"))
     }
-    
+
     #[test]
     fn test17() {
         assert!(filter_matches_topic("abc/+/ghi", "abc/def/ghi"))
@@ -226,7 +227,7 @@ mod tests {
     fn test35() {
         assert!(!topic_filter_is_valid("#abc"))
     }
-    
+
     #[test]
     fn test36() {
         assert!(topic_filter_is_valid("#"))

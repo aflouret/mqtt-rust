@@ -1,16 +1,16 @@
 use crate::all_packets::connack::{Connack, CONNACK_PACKET_TYPE};
 use crate::all_packets::connect::{Connect, CONNECT_PACKET_TYPE};
-use crate::all_packets::publish::{Publish, PUBLISH_PACKET_TYPE};
-use crate::all_packets::puback::{Puback, PUBACK_PACKET_TYPE};
-use crate::all_packets::subscribe::{Subscribe, SUBSCRIBE_PACKET_TYPE};
-use crate::all_packets::suback::{Suback, SUBACK_PACKET_TYPE};
 use crate::all_packets::disconnect::{Disconnect, DISCONNECT_PACKET_TYPE};
-use crate::all_packets::unsubscribe::{Unsubscribe, UNSUBSCRIBE_PACKET_TYPE};
-use crate::all_packets::unsuback::{Unsuback, UNSUBACK_PACKET_TYPE};
 use crate::all_packets::pingreq::{Pingreq, PINGREQ_PACKET_TYPE};
 use crate::all_packets::pingresp::{Pingresp, PINGRESP_PACKET_TYPE};
+use crate::all_packets::puback::{Puback, PUBACK_PACKET_TYPE};
+use crate::all_packets::publish::{Publish, PUBLISH_PACKET_TYPE};
+use crate::all_packets::suback::{Suback, SUBACK_PACKET_TYPE};
+use crate::all_packets::subscribe::{Subscribe, SUBSCRIBE_PACKET_TYPE};
+use crate::all_packets::unsuback::{Unsuback, UNSUBACK_PACKET_TYPE};
+use crate::all_packets::unsubscribe::{Unsubscribe, UNSUBSCRIBE_PACKET_TYPE};
 use crate::parser::decode_mqtt_string;
-use std::io::{Read, Write, Error, ErrorKind::Other};
+use std::io::{Error, ErrorKind::Other, Read, Write};
 
 const PACKET_TYPE_BYTE: u8 = 0xF0;
 pub const SOCKET_CLOSED_ERROR_MSG: &str = "Socket cerrado";
@@ -32,12 +32,15 @@ pub struct Subscription {
 impl Subscription {
     pub fn read_from(stream: &mut dyn Read) -> Result<Subscription, Box<std::io::Error>> {
         let topic_filter = decode_mqtt_string(stream)?;
-        
+
         let mut qos_level_bytes = [0u8; 1];
         stream.read_exact(&mut qos_level_bytes)?;
 
         if qos_level_bytes[0] & 0xFA != 0 {
-            return Err(Box::new(Error::new(Other, "The upper 6 bits of the Requested QoS byte should be 0")));
+            return Err(Box::new(Error::new(
+                Other,
+                "The upper 6 bits of the Requested QoS byte should be 0"
+            )));
         }
 
         let qos_level = u8::from_be_bytes(qos_level_bytes);
@@ -47,12 +50,17 @@ impl Subscription {
             _ => Qos::AtLeastOnce,
         };
 
-        Ok(Subscription{topic_filter, max_qos})
+        Ok(Subscription {
+            topic_filter,
+            max_qos })
     }
 }
 
 pub trait ReadPacket {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>>;
+    fn read_from(
+        stream: &mut dyn Read,
+        initial_byte: u8
+    ) -> Result<Packet, Box<dyn std::error::Error>>;
 }
 
 pub trait WritePacket {
@@ -75,7 +83,7 @@ pub enum Packet {
 }
 
 impl Packet {
-    pub fn read_from(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>>{
+    pub fn read_from(stream: &mut dyn Read) -> Result<Packet, Box<dyn std::error::Error>> {
         let mut indetifier_byte = [0u8; 1];
         let read_bytes = stream.read(&mut indetifier_byte)?;
         if read_bytes == 0 {
@@ -85,7 +93,7 @@ impl Packet {
             CONNECT_PACKET_TYPE => Connect::read_from(stream, indetifier_byte[0]),
             CONNACK_PACKET_TYPE => Connack::read_from(stream, indetifier_byte[0]),
             PUBLISH_PACKET_TYPE => Publish::read_from(stream, indetifier_byte[0]),
-            PUBACK_PACKET_TYPE =>  Puback::read_from(stream, indetifier_byte[0]),
+            PUBACK_PACKET_TYPE => Puback::read_from(stream, indetifier_byte[0]),
             SUBSCRIBE_PACKET_TYPE => Subscribe::read_from(stream, indetifier_byte[0]),
             SUBACK_PACKET_TYPE => Suback::read_from(stream, indetifier_byte[0]),
             UNSUBSCRIBE_PACKET_TYPE => Unsubscribe::read_from(stream, indetifier_byte[0]),
@@ -97,7 +105,7 @@ impl Packet {
         }
     }
 
-    pub fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>>{
+    pub fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         match self {
             Packet::Connect(connect) => {
                 println!("Se manda el connect...");
@@ -138,7 +146,7 @@ impl Packet {
                 println!("Se manda el unsuback...");
                 unsuback.write_to(stream)
             }
-            
+
             Packet::Pingreq(pingreq) => {
                 println!("Se manda el pingreq...");
                 pingreq.write_to(stream)

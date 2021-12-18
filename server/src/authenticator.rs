@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error, ErrorKind};
 
-pub struct Authenticator{
-    accounts: HashMap<String, String>
+pub struct Authenticator {
+    accounts: HashMap<String, String>,
 }
 
 impl Authenticator {
     fn new(accounts: HashMap<String, String>) -> Authenticator {
-        Authenticator {accounts}
+        Authenticator { accounts }
     }
 
     pub fn from(filename: String) -> Result<Authenticator, Error> {
@@ -16,18 +16,20 @@ impl Authenticator {
         let file = File::open(filename)?;
         let reader = BufReader::new(file);
 
-
-        for line in reader.lines(){
+        for line in reader.lines() {
             let line = line.unwrap();
             let vec: Vec<&str> = line.split(";").collect();
             if vec.len() != 2 {
                 return Err(Error::new(ErrorKind::Other, "Incorrect format"));
             }
 
-            if hash.contains_key(&vec.get(0).unwrap().to_string()){
+            if hash.contains_key(&vec.get(0).unwrap().to_string()) {
                 return Err(Error::new(ErrorKind::Other, "Username already in use"));
             }
-            hash.insert(vec.get(0).unwrap().to_string(), vec.get(1).unwrap().to_string());
+            hash.insert(
+                vec.get(0).unwrap().to_string(),
+                vec.get(1).unwrap().to_string(),
+            );
         }
 
         Ok(Authenticator::new(hash))
@@ -55,7 +57,8 @@ mod tests {
         hash.insert("usuario2".to_string(), "contraseña2".to_string());
         hash.insert("usuario3".to_string(), "contraseña3".to_string());
         let authenticator = Authenticator::new(hash);
-        let to_test = authenticator.account_is_valid(&"usuario2".to_string(), &"contraseña2".to_string());
+        let to_test =
+            authenticator.account_is_valid(&"usuario2".to_string(), &"contraseña2".to_string());
         assert_eq!(to_test, true);
     }
 
@@ -66,7 +69,8 @@ mod tests {
         hash.insert("usuario2".to_string(), "contraseña2".to_string());
         hash.insert("usuario3".to_string(), "contraseña3".to_string());
         let authenticator = Authenticator::new(hash);
-        let to_test = authenticator.account_is_valid(&"usuario4".to_string(), &"contraseña4".to_string());
+        let to_test =
+            authenticator.account_is_valid(&"usuario4".to_string(), &"contraseña4".to_string());
         assert_eq!(to_test, false);
     }
 
@@ -77,7 +81,8 @@ mod tests {
         hash.insert("usuario2".to_string(), "contraseña2".to_string());
         hash.insert("usuario3".to_string(), "contraseña3".to_string());
         let authenticator = Authenticator::new(hash);
-        let to_test = authenticator.account_is_valid(&"usuario2".to_string(), &"contraseña3".to_string());
+        let to_test =
+            authenticator.account_is_valid(&"usuario2".to_string(), &"contraseña3".to_string());
         assert_eq!(to_test, false);
     }
 }

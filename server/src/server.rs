@@ -1,16 +1,15 @@
+use crate::client_handler::ClientHandler;
 use crate::config::Config;
-use common::packet::{Packet};
-use std::io;
-use std::net::{TcpListener};
-use std::collections::HashMap;
-use crate::client_handler::{ClientHandler};
 use crate::packet_processor::PacketProcessor;
+use common::packet::Packet;
+use std::collections::HashMap;
+use std::io;
+use std::net::TcpListener;
 
-use std::sync::{Mutex, mpsc};
-use std::sync::mpsc::{Sender};
-use std::sync::{RwLock, Arc};
-use common::logging::logger::{Logger, LogMessage};
-
+use common::logging::logger::{LogMessage, Logger};
+use std::sync::mpsc::Sender;
+use std::sync::{mpsc, Mutex};
+use std::sync::{Arc, RwLock};
 
 pub struct Server {
     config: Config,
@@ -26,27 +25,52 @@ impl Server {
         let address = self.config.get_address() + &*self.config.get_port();
         let listener = TcpListener::bind(&address)?;
         println!("Servidor escuchando en: {} ", &address);
-        self.logger.log_msg(LogMessage::new("Servidor escuchando:".to_string(), "8080".to_string()))?;
-        let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>::new()));
-        let (c_h_reader_tx, packet_proc_rx) = mpsc::channel::<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>();
+        self.logger.log_msg(LogMessage::new(
+            "Servidor escuchando:".to_string(),
+            "8080".to_string(),
+        ))?;
+        let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<
+            u32,
+            Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>,
+        >::new()));
+        let (c_h_reader_tx, packet_proc_rx) =
+            mpsc::channel::<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>();
 
-        let packet_processor = PacketProcessor::new(packet_proc_rx, senders_to_c_h_writers.clone(), self.logger.clone());
+        let packet_processor = PacketProcessor::new(
+            packet_proc_rx,
+            senders_to_c_h_writers.clone(),
+            self.logger.clone(),
+        );
         let packet_processor_join_handle = packet_processor.run();
 
         self.handle_connections(listener, senders_to_c_h_writers, c_h_reader_tx);
-        
+
         packet_processor_join_handle.join().unwrap();
         Ok(())
     }
 
-    fn handle_connections(&self, listener: TcpListener, senders_to_c_h_writers:  Arc<RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet,Box<dyn std::error::Error + Send>>>>>>>>, c_h_reader_tx: Sender<(u32, Result<Packet,Box<dyn std::error::Error + Send>>)>) {
+    fn handle_connections(
+        &self,
+        listener: TcpListener,
+        senders_to_c_h_writers: Arc<
+            RwLock<
+                HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>,
+            >,
+        >,
+        c_h_reader_tx: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
+    ) {
         let mut id: u32 = 0;
         let mut join_handles = vec![];
 
         for stream in listener.incoming() {
             if let Ok(stream) = stream {
-                let client_handler = ClientHandler::new(id, stream, senders_to_c_h_writers.clone(), c_h_reader_tx.clone());
-                
+                let client_handler = ClientHandler::new(
+                    id,
+                    stream,
+                    senders_to_c_h_writers.clone(),
+                    c_h_reader_tx.clone(),
+                );
+
                 if let Ok(join_handle) = client_handler.run() {
                     join_handles.push(join_handle);
                 };
@@ -59,5 +83,4 @@ impl Server {
             handle.join().unwrap();
         }
     }
-    
 }

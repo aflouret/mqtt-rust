@@ -1,13 +1,15 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use std::io::{Cursor, Read, Write, Error, ErrorKind::UnexpectedEof, ErrorKind::Other};
-use crate::parser::{encode_mqtt_string, decode_remaining_length, decode_mqtt_string, encode_remaining_length};
+use crate::parser::{
+    decode_mqtt_string, decode_remaining_length, encode_mqtt_string, encode_remaining_length,
+};
+use std::io::{Cursor, Error, ErrorKind::Other, ErrorKind::UnexpectedEof, Read, Write};
 
 pub const UNSUBSCRIBE_PACKET_TYPE: u8 = 0xa0;
 const UNSUBSCRIBE_FIRST_BYTE: u8 = 0xa2;
 const VARIABLE_HEADER_REMAINING_LENGTH: u8 = 2;
 
 #[derive(Debug)]
-pub struct Unsubscribe{
+pub struct Unsubscribe {
     pub topics: Vec<String>,
     pub packet_id: u16,
 }
@@ -20,11 +22,11 @@ impl Unsubscribe {
         }
     }
 
-    pub fn add_topic(&mut self, topic: String){
+    pub fn add_topic(&mut self, topic: String) {
         self.topics.push(topic);
     }
 
-    fn get_remaining_length(&self) -> Result<u32, String> {  
+    fn get_remaining_length(&self) -> Result<u32, String> {
         //VARIABLE HEADER
         let mut length = VARIABLE_HEADER_REMAINING_LENGTH;
 
@@ -77,16 +79,16 @@ impl ReadPacket for Unsubscribe {
         let mut packet_identifier_bytes = [0u8; 2];
         remaining_bytes.read_exact(&mut packet_identifier_bytes)?;
         let packet_identifier = u16::from_be_bytes(packet_identifier_bytes);
-  
+
         let mut packet_unsubscribe = Unsubscribe::new(packet_identifier);
         loop {
-            match decode_mqtt_string(&mut remaining_bytes){
+            match decode_mqtt_string(&mut remaining_bytes) {
                 Err(e) => {
-                    match e.kind(){
+                    match e.kind() {
                         UnexpectedEof => break,
                         _ => return Err(Box::new(e)),
                     }
-                },
+                }
                 Ok(topic) => packet_unsubscribe.add_topic(topic),
             }
         }
@@ -99,7 +101,7 @@ impl ReadPacket for Unsubscribe {
     }
 }
 
-fn verify_unsubscribe_byte(byte: &u8) -> Result<(), String>{
+fn verify_unsubscribe_byte(byte: &u8) -> Result<(), String> {
     match *byte {
         UNSUBSCRIBE_FIRST_BYTE => return Ok(()),
         _ => return Err("Wrong First Byte".to_string()),
@@ -129,7 +131,7 @@ mod tests {
         let to_test = Unsubscribe::read_from(&mut buff, 0xa2).unwrap();
         if let Packet::Unsubscribe(to_test) = to_test {
             assert_eq!(to_test.packet_id, unsubscribe_packet.packet_id);
-            if let Some(topic) = unsubscribe_packet.topics.pop(){
+            if let Some(topic) = unsubscribe_packet.topics.pop() {
                 assert_eq!(topic, "otro test".to_string());
             }
         }
@@ -147,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn error_empty_topic_list(){
+    fn error_empty_topic_list() {
         let unsubscribe_packet = Unsubscribe::new(73);
         let mut buff = Cursor::new(Vec::new());
         unsubscribe_packet.write_to(&mut buff).unwrap();

@@ -1,6 +1,3 @@
-use std::sync::Arc;
-use std::thread::{self, JoinHandle};
-use std::time::Duration;
 use common::all_packets::connack::Connack;
 use common::all_packets::connect::{Connect, ConnectPayload};
 use common::all_packets::publish::{Publish, PublishFlags};
@@ -9,11 +6,12 @@ use common::all_packets::subscribe::Subscribe;
 use common::logging::logger::Logger;
 use server::config::Config;
 use server::server::Server;
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
-use common::packet::{Packet, WritePacket, Subscription, Qos};
+use common::packet::{Packet, Qos, Subscription, WritePacket};
 use std::net::TcpStream;
-
-
 
 #[test]
 fn main() {
@@ -22,31 +20,28 @@ fn main() {
 }
 
 fn test01() {
-        
-        run_server();
+    run_server();
 
-        thread::sleep(Duration::from_millis(1000));
+    thread::sleep(Duration::from_millis(1000));
 
-        let client_handle = run_client01();
-        
-        client_handle.join().unwrap();
+    let client_handle = run_client01();
+
+    client_handle.join().unwrap();
 }
 
 fn test02() {
-        
     run_server();
 
     thread::sleep(Duration::from_millis(1000));
 
     let client_handle2 = run_client02();
     let client_handle3 = run_client03();
-    
+
     client_handle3.join().unwrap();
     client_handle2.join().unwrap();
-
 }
 
-fn run_server() -> JoinHandle<()>{
+fn run_server() -> JoinHandle<()> {
     let config = Config::new();
     let logger = Logger::new(config.get_logfilename());
     let server = Server::new(config, Arc::new(logger.unwrap())).unwrap();
@@ -60,26 +55,23 @@ fn run_client01() -> JoinHandle<()> {
         let mut socket = TcpStream::connect("127.0.0.1:8080").unwrap();
 
         let connect_packet = Connect::new(
-            ConnectPayload::new(
-                "a".to_owned(),
-                None,
-                None,
-                None,
-                None,
-            ),
+            ConnectPayload::new("a".to_owned(), None, None, None, None),
             60,
             true,
             false,
             false,
         );
-    
+
         connect_packet.write_to(&mut socket).unwrap();
 
         let received_connack_packet = Packet::read_from(&mut socket).unwrap();
         let expected_connack_packet = Connack::new(false, 0);
 
         if let Packet::Connack(received_connack_packet) = received_connack_packet {
-            assert_eq!(received_connack_packet.session_present, expected_connack_packet.session_present);
+            assert_eq!(
+                received_connack_packet.session_present,
+                expected_connack_packet.session_present
+            );
             assert_eq!(
                 received_connack_packet.connect_return_code,
                 expected_connack_packet.connect_return_code
@@ -93,38 +85,33 @@ fn run_client02() -> JoinHandle<()> {
         let mut socket = TcpStream::connect("127.0.0.1:8080").unwrap();
 
         let connect_packet = Connect::new(
-            ConnectPayload::new(
-                "b".to_owned(),
-                None,
-                None,
-                None,
-                None,
-            ),
+            ConnectPayload::new("b".to_owned(), None, None, None, None),
             60,
             true,
             false,
             false,
         );
-    
+
         connect_packet.write_to(&mut socket).unwrap();
 
         let received_connack_packet = Packet::read_from(&mut socket).unwrap();
         let expected_connack_packet = Connack::new(false, 0);
 
         if let Packet::Connack(received_connack_packet) = received_connack_packet {
-            assert_eq!(received_connack_packet.session_present, expected_connack_packet.session_present);
+            assert_eq!(
+                received_connack_packet.session_present,
+                expected_connack_packet.session_present
+            );
             assert_eq!(
                 received_connack_packet.connect_return_code,
                 expected_connack_packet.connect_return_code
             )
         }
 
-        let mut subscribe_packet = Subscribe::new(
-            1,
-        );
-        subscribe_packet.add_subscription(Subscription{ 
-            topic_filter: "topic_a".to_string(), 
-            max_qos: Qos::AtLeastOnce 
+        let mut subscribe_packet = Subscribe::new(1);
+        subscribe_packet.add_subscription(Subscription {
+            topic_filter: "topic_a".to_string(),
+            max_qos: Qos::AtLeastOnce,
         });
 
         subscribe_packet.write_to(&mut socket).unwrap();
@@ -163,32 +150,28 @@ fn run_client02() -> JoinHandle<()> {
     })
 }
 
-
 fn run_client03() -> JoinHandle<()> {
     thread::spawn(move || {
         let mut socket = TcpStream::connect("127.0.0.1:8080").unwrap();
 
         let connect_packet = Connect::new(
-            ConnectPayload::new(
-                "c".to_owned(),
-                None,
-                None,
-                None,
-                None,
-            ),
+            ConnectPayload::new("c".to_owned(), None, None, None, None),
             60,
             true,
             false,
             false,
         );
-    
+
         connect_packet.write_to(&mut socket).unwrap();
 
         let received_connack_packet = Packet::read_from(&mut socket).unwrap();
         let expected_connack_packet = Connack::new(false, 0);
 
         if let Packet::Connack(received_connack_packet) = received_connack_packet {
-            assert_eq!(received_connack_packet.session_present, expected_connack_packet.session_present);
+            assert_eq!(
+                received_connack_packet.session_present,
+                expected_connack_packet.session_present
+            );
             assert_eq!(
                 received_connack_packet.connect_return_code,
                 expected_connack_packet.connect_return_code
@@ -213,6 +196,5 @@ fn run_client03() -> JoinHandle<()> {
         publish_packet_1.write_to(&mut socket).unwrap();
 
         thread::sleep(Duration::from_millis(10000));
-
     })
 }

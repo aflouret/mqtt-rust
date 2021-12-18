@@ -1,5 +1,3 @@
-
-
 const LOGFILE: &str = "logfile.txt";
 
 pub struct Config {
@@ -27,5 +25,7 @@ impl Config {
         self.address.to_string()
     }
 
-    pub fn get_logfilename(&self) -> String {self.log_filename.to_string()}
+    pub fn get_logfilename(&self) -> String {
+        self.log_filename.to_string()
+    }
 }
