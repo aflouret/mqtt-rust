@@ -47,15 +47,15 @@ impl Client {
         self.server_stream = Some(stream);
     }
 
-    pub fn start_client(mut self, recv_connection: Receiver<EventHandlers>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn start_client(mut self, recv_connection: Receiver<EventHandlers>, sender_to_window: Sender<ResponseHandlers>, sender_intern: Sender<EventHandlers>) -> Result<(), Box<dyn std::error::Error>> {
         let recv_connection = Arc::new(Mutex::new(recv_connection));
         loop{
             //probando
-            self.run_gui_processor(recv_connection.clone(), sender_to_window.clone())?;
+            self.run_gui_processor(recv_connection.clone(), sender_to_window.clone(), sender_intern.clone())?;
         }
     }
 
-    pub fn run_gui_processor(&mut self, recv_connection: Arc<Mutex<std::sync::mpsc::Receiver<EventHandlers>>>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run_gui_processor(&mut self, recv_connection: Arc<Mutex<std::sync::mpsc::Receiver<EventHandlers>>>, sender_to_window: Sender<ResponseHandlers>, sender_intern: Sender<EventHandlers>) -> Result<(), Box<dyn std::error::Error>> {
         let recv_connection = recv_connection.lock().unwrap();
         let mut keep_alive_sec: u16 = 0;
 
@@ -63,7 +63,7 @@ impl Client {
             if let Ok(conection) = recv_connection.recv() {
                 match conection {
                     EventHandlers::HandleConection(conec) => {
-                        self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
+                        self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec, sender_intern.clone()).unwrap();
                         println!("Connected Client");
                         break;
                     }
@@ -79,7 +79,7 @@ impl Client {
             
             match recv_connection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
                 Ok(EventHandlers::HandleConection(conec)) => {
-                    self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec).unwrap();
+                    self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec, sender_intern.clone() ).unwrap();
                 }
 
                 Ok(EventHandlers::HandlePublish(publish)) => {
@@ -298,7 +298,7 @@ impl Client {
         Ok(publish_packet)
     }
 
-    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16) -> io::Result<()> {
+    pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16, sender_intern: Sender<EventHandlers>) -> io::Result<()> {
         let address = conec.get_address();
         let mut socket = TcpStream::connect(address.clone()).unwrap();
         let keep_alive_time = conec.keep_alive_second.parse().unwrap();
@@ -321,7 +321,7 @@ impl Client {
         } 
         socket.set_read_timeout(Some(Duration::new(max_wait_time_for_connack, 0))).unwrap();
         
-        Client::handle_response(socket.try_clone().unwrap(), sender_to_window);
+        Client::handle_response(socket.try_clone().unwrap(), sender_to_window, sender_intern.clone());
 
         *keep_alive_sec = keep_alive_time.clone();
         println!("CLIENT: Send connect packet: {:?}", &connect_packet);

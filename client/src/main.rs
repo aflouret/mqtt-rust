@@ -37,7 +37,7 @@ fn main() {
         let builder = build_ui(app);
         setup(builder, sender_conection.clone(), window_recv);
         thread::spawn(move || {
-            let client = Client::new("User".to_owned()); 
+            let client = Client::new();
             client.start_client(recv_conection, client_sender, sender_conection).unwrap();
         });
     });

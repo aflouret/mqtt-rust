@@ -4,6 +4,8 @@ use crate::parser::{decode_remaining_length, encode_remaining_length};
 
 pub const CONNACK_PACKET_TYPE: u8 = 0x20;
 const CONNACK_REMAINING_LENGTH: u32 = 2;
+pub const CONNACK_BAD_USERNAME_OR_PASSWORD: u8 = 0x04;
+pub const CONNACK_CONNECTION_ACCEPTED: u8 = 0x00;
 
 #[derive(Debug)]
 pub struct Connack {

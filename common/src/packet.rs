@@ -13,6 +13,7 @@ use crate::parser::decode_mqtt_string;
 use std::io::{Read, Write, Error, ErrorKind::Other};
 
 const PACKET_TYPE_BYTE: u8 = 0xF0;
+pub const SOCKET_CLOSED_ERROR_MSG: &str = "Socket cerrado";
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
