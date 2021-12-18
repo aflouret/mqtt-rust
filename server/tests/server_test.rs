@@ -41,8 +41,8 @@ fn test02() {
     let client_handle2 = run_client02();
     let client_handle3 = run_client03();
     
-    client_handle2.join().unwrap();
     client_handle3.join().unwrap();
+    client_handle2.join().unwrap();
 
 }
 
@@ -203,7 +203,6 @@ fn run_client03() -> JoinHandle<()> {
         // );
 
         // publish_packet_0.write_to(&mut socket).unwrap();
-        thread::sleep(Duration::from_millis(1000));
         let publish_packet_1 = Publish::new(
             PublishFlags::new(0b0011_0010),
             "topic_a".to_string(),
@@ -212,5 +211,8 @@ fn run_client03() -> JoinHandle<()> {
         );
 
         publish_packet_1.write_to(&mut socket).unwrap();
+
+        thread::sleep(Duration::from_millis(10000));
+
     })
 }

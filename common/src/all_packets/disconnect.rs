@@ -8,6 +8,12 @@ pub const DISCONNECT_PACKET_TYPE: u8 = 0xe0;
 #[derive(Debug)]
 pub struct Disconnect;
 
+impl Disconnect {
+    pub fn new() -> Disconnect {
+        Disconnect {}
+    }
+}
+
 impl WritePacket for Disconnect {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         // FIXED HEADER
