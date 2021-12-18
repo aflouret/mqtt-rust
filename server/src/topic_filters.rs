@@ -27,24 +27,6 @@ fn match_levels(filter: &[&str], topic: &[&str]) -> bool {
     return true;
 }
 
-pub fn topic_filter_is_valid(filter: &str) -> bool {
-    let len = filter.len();
-
-    if (filter.contains('#') && filter.find('#') != Some(len-1)) ||
-    (filter.contains('#') && filter.len() > 1 && !filter[..len-1].ends_with('/')) {
-        return false
-    }
-
-    let filter_levels: Vec<&str> = filter.split('/').collect();
-
-    for level in filter_levels.iter() {
-        if level.contains('+') && level.len() != 1 {
-            return false;
-        }
-    }
-
-    true
-}
 
 #[cfg(test)]
 mod tests {
@@ -199,61 +181,5 @@ mod tests {
     fn test30() {
         assert!(filter_matches_topic("$abc/def/+", "$abc/def/ghi"))
     }
-
-    // topic_filter_is_valid tests:
-
-    #[test]
-    fn test31() {
-        assert!(topic_filter_is_valid("abc/#"))
-    }
-
-    #[test]
-    fn test32() {
-        assert!(!topic_filter_is_valid("abc/#/def"))
-    }
-
-    #[test]
-    fn test33() {
-        assert!(!topic_filter_is_valid("abc#"))
-    }
-
-    #[test]
-    fn test34() {
-        assert!(!topic_filter_is_valid("abc#def"))
-    }
-
-    #[test]
-    fn test35() {
-        assert!(!topic_filter_is_valid("#abc"))
-    }
     
-    #[test]
-    fn test36() {
-        assert!(topic_filter_is_valid("#"))
-    }
-
-    #[test]
-    fn test37() {
-        assert!(topic_filter_is_valid("+"))
-    }
-
-    #[test]
-    fn test38() {
-        assert!(topic_filter_is_valid("+/abc/#"))
-    }
-
-    #[test]
-    fn test39() {
-        assert!(!topic_filter_is_valid("abc+"))
-    }
-
-    #[test]
-    fn test40() {
-        assert!(!topic_filter_is_valid("+abc"))
-    }
-
-    #[test]
-    fn test41() {
-        assert!(!topic_filter_is_valid("abc+def"))
-    }
 }
