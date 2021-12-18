@@ -1,11 +1,8 @@
 use common::all_packets::connack::Connack;
-use common::all_packets::puback::Puback;
 use common::all_packets::publish::Publish;
 use common::all_packets::suback::Suback;
 #[derive(Debug)]
 pub enum ResponseHandlers {
-    ConnackResponse(ConnackResponse),
-    SubackResponse(SubackResponse),
     PublishResponse(PublishResponse),
     PubackResponse(PubackResponse),
 }

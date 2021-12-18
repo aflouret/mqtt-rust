@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-use std::net::TcpStream;
 use common::all_packets::connect::Connect;
 use common::all_packets::publish::Publish;
-use common::packet::{Packet, Subscription, Qos};
+use common::packet::{Subscription, Qos};
 use crate::topic_filters;
 
 
@@ -114,16 +112,3 @@ pub struct ClientData{
     username: Option<String>,
     password: Option<String>,
 }
-
-/* ---------------------------------------------------------- */
-
-
-// pub enum NotFullyTransmittedMessages {
-//     // QoS1 messages sent to the Client, but not been completely acknowledged
-//     SentButNotAcknowledged(ApplicationMessage),
-//     // QoS1 messages pending transmission to the Client
-//     NotSent(ApplicationMessage),
-//     // Optional: QoS0 messages pending transmission to the Client
-// }
-
-// pub struct ApplicationMessage;

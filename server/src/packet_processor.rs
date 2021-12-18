@@ -20,7 +20,6 @@ use common::all_packets::subscribe::Subscribe;
 use common::all_packets::pingreq::Pingreq;
 use common::all_packets::pingresp::Pingresp;
 use std::io::{Error, ErrorKind};
-use std::time::Duration;
 
 const PACKETS_ID: u16 = 100;
 
@@ -84,7 +83,7 @@ impl PacketProcessor {
                                 self.handle_disconnect_error(c_h_id);
                             }
                         }
-                        Err(a) => {
+                        Err(_e) => {
                             self.handle_disconnect_error(c_h_id);
                         }
                     }
@@ -168,16 +167,21 @@ impl PacketProcessor {
     }
 
     pub fn process_packet(&mut self, packet: Packet, c_h_id: u32) -> Result<(), Box<dyn std::error::Error>> {
+        let mut client_id = "No client id yet".to_string();
+        if let Some(c_id) = self.get_client_id_from_handler_id(c_h_id) {
+            client_id = c_id;
+        }
+
         let response_packet = match packet {
             Packet::Connect(connect_packet) => {
-                self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(), c_h_id.to_string()))?;
+                self.logger.log_msg(LogMessage::new("Connect Packet received from:".to_string(), client_id.to_string()))?;
                 println!("Recibi el Connect (en process_pracket)");
                 let connack_packet = self.handle_connect_packet(connect_packet, c_h_id)?;
                 Some(Ok(Packet::Connack(connack_packet)))
             }
 
             Packet::Publish(publish_packet) => {
-                self.logger.log_msg(LogMessage::new("Publish Packet received from:".to_string(), c_h_id.to_string()))?;
+                self.logger.log_msg(LogMessage::new("Publish Packet received from:".to_string(), client_id))?;
                 let puback_packet = self.handle_publish_packet(publish_packet)?;
                 if let Some(puback_packet) = puback_packet {
                     Some(Ok(Packet::Puback(puback_packet)))
@@ -187,39 +191,38 @@ impl PacketProcessor {
             }
 
             Packet::Puback(puback_packet) => {
-                self.logger.log_msg(LogMessage::new("Puback Packet received from:".to_string(), c_h_id.to_string()))?;
+                self.logger.log_msg(LogMessage::new("Puback Packet received from:".to_string(), client_id.to_string()))?;
                 self.handle_puback_packet(puback_packet)?;
                 None
             }
 
             Packet::Subscribe(subscribe_packet) => {
-                self.logger.log_msg(LogMessage::new("Subscribe Packet received from:".to_string(), c_h_id.to_string()))?;
+                self.logger.log_msg(LogMessage::new("Subscribe Packet received from:".to_string(), client_id.to_string()))?;
                 let suback_packet = self.handle_subscribe_packet(subscribe_packet, c_h_id)?;
                 Some(Ok(Packet::Suback(suback_packet)))
             }
 
             Packet::Unsubscribe(unsubscribe_packet) => {
-                self.logger.log_msg(LogMessage::new("Unsubscribe Packet received from:".to_string(), c_h_id.to_string()))?;
+                self.logger.log_msg(LogMessage::new("Unsubscribe Packet received from:".to_string(), client_id.to_string()))?;
                 let unsuback_packet = self.handle_unsubscribe_packet(unsubscribe_packet, c_h_id)?;
                 Some(Ok(Packet::Unsuback(unsuback_packet)))
             }
 
             Packet::Pingreq(pingreq_packet) => {
-                self.logger.log_msg(LogMessage::new("Pingreq Packet received from:".to_string(), c_h_id.to_string()))?;
+                self.logger.log_msg(LogMessage::new("Pingreq Packet received from:".to_string(), client_id.to_string()))?;
                 let pingresp_packet = self.handle_pingreq_packet(pingreq_packet, c_h_id)?;
                 Some(Ok(Packet::Pingresp(pingresp_packet)))
             }
 
             Packet::Disconnect(_disconnect_packet) => {
-                self.logger.log_msg(LogMessage::new("Disconnect Packet received from:".to_string(), c_h_id.to_string()))?;
-                //self.handle_disconnect_packet(c_h_id)?;
-                // TODO: desconectar al cliente...
+                self.logger.log_msg(LogMessage::new("Disconnect Packet received from:".to_string(), client_id.to_string()))?;
                 self.handle_disconnect(c_h_id);
                 None
             }
 
             _ => { return Err("Invalid packet".into()); }
         };
+        
 
         if let Some(response_packet) = response_packet {
             //Si es un Ok(Packet::Connack(connack)) con return code != 0, se envia el connack y se procede a desconectar al cliente
@@ -287,7 +290,7 @@ impl PacketProcessor {
         if clean_session { session_present = false; } else { session_present = exists_previous_session; } // TODO: revisar esto, línea 683 pdf
 
         let connack_packet = Connack::new(session_present, 0);
-        self.logger.log_msg(LogMessage::new("Connack packet send it to:".to_string(), client_handler_id.to_string()));
+        self.logger.log_msg(LogMessage::new("Connack packet send it to:".to_string(), client_handler_id.to_string()))?;
         Ok(connack_packet)
     }
 
@@ -417,7 +420,7 @@ impl PacketProcessor {
         for (_, session) in &self.sessions {
             if let Some(_) = session.is_subscribed_to(&publish_packet.topic_name) {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
-                    self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
+                    self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())))?;
                 }
             }
         }
@@ -445,7 +448,7 @@ impl PacketProcessor {
                         publish_send_2.packet_id = packet_id;
                         self.packets_id.insert(packet_id.unwrap(), true);
                         
-                        self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())));
+                        self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())))?;
                         self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send_2.clone())))).unwrap();
                     }
                 },
@@ -455,7 +458,7 @@ impl PacketProcessor {
                         let mut publish_send_2 = publish_send.clone();
                         publish_send_2.packet_id = None;
                         publish_send_2.flags.qos_level = Qos::AtMostOnce;
-                        self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())));
+                        self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())))?;
                     }
                 },
 
@@ -501,7 +504,7 @@ impl PacketProcessor {
         Ok(())
     }
 
-    fn find_key_for_value(map: HashMap<u16, bool>, value: bool) -> Option<u16> {
+    fn find_key_for_value(map: HashMap<u16, bool>, _value: bool) -> Option<u16> {
         for (key, value) in map {
             if value == false {
                 return  Some(key);

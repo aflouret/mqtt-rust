@@ -18,7 +18,7 @@ impl Logger {
                 loop {
                     let msg = receiver.recv();
                     if let Ok(m) = msg {
-                        file.write(m.msg_to_string().as_bytes());
+                        file.write(m.msg_to_string().as_bytes()).unwrap();
                     }
                 }
             );
@@ -33,7 +33,7 @@ impl Logger {
     pub fn log_msg(&self, msg: LogMessage) -> Result<(), Box<dyn std::error::Error>> {
         println!("{:?}", msg);
         if let Ok(sender) = self.logger_send.lock() {
-            sender.send(msg);
+            sender.send(msg)?;
         } else {
             return Err("Error al loggear el mensaje".into());
         }
@@ -44,21 +44,15 @@ impl Logger {
 
 #[derive(Clone, Debug)]
 pub struct LogMessage {
-    client_id: String,
     message: String,
+    client_id: String,
 }
-/*
-impl Debug for LogMessage {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Ok(("todo ok"))
-    }
-}
-*/
+
 impl LogMessage {
     pub fn new(msg: String ,client: String) -> LogMessage {
         LogMessage {
-            client_id: client,
             message: msg,
+            client_id: client,
         }
     }
 

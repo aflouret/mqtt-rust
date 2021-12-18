@@ -1,6 +1,5 @@
-use std::thread::JoinHandle;
 use std::{thread};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc};
 use std::sync::mpsc::{Receiver, Sender};
 use crate::client::Client;
 
@@ -9,7 +8,6 @@ extern crate gtk;
 
 use common::all_packets::disconnect::Disconnect;
 use glib::clone;
-use gtk::{Application, Builder, TextView};
 use gtk::prelude::*;
 use common::all_packets::unsubscribe::{Unsubscribe};
 use handlers::HandleDisconnect;
@@ -23,12 +21,6 @@ use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 mod client;
 mod handlers;
 mod response;
-
-// -> Result<(), Box<dyn std::error::Error>>
-/*
-    //Sender: Client envía a Window , Recv: Window recibe data a mostrar
-    let (sender_cli, recv_window) = mpsc::channel::<Packet>();
- */
 
 fn main() {
     let application = gtk::Application::new(None, Default::default());
@@ -74,7 +66,6 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
                     ResponseHandlers::PubackResponse(puback) => {
                         intern_sender.send(ResponseHandlers::PubackResponse(PubackResponse::new(puback.msg))).unwrap();
                     }
-                    _ => ()
                 }
             }
         }
@@ -95,7 +86,6 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
                 let puback_msg = puback.msg;
                 response_publish.set_text(&*puback_msg);
             }
-            _ => ()
         }
         glib::Continue(true)
     });
@@ -150,23 +140,12 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
             new(address.clone(),(&client_id_entry.text()).to_string(),
                 a, b, c,
                 (&keep_alive_entry.text()).to_string(),
-                //Some((&username_entry.text()).to_string()),
-                //Some((&password_entry.text()).to_string()),
-                //Some((&last_will_msg_entry.text()).to_string()),
-                //Some((&last_will_topic_entry.text()).to_string()),
                 username,
                 password,
                 last_will_msg,
                 last_will_topic
         ));
         sender.send(event_conection).unwrap();
-/*        username_entry.set_text("");
-        password_entry.set_text("");
-        client_id_entry.set_text("");
-        last_will_msg_entry.set_text("");
-        last_will_topic_entry.set_text("");
-        ip_entry.set_text("");
-        port_entry.set_text("");*/
         }));
 
     let disconnect_button: gtk::Button = builder.object("disconnect_button").unwrap();
@@ -187,7 +166,7 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         let event_publish = EventHandlers::HandlePublish(HandlePublish::new(
             (&topic_pub_entry.text()).to_string(),(&app_msg_entry.text()).to_string(),
             qos_0_rb.is_active(), qos_1_rb.is_active(), retain_checkbox.is_active()));
-        sender.send(event_publish);
+        sender.send(event_publish).unwrap();
     }));
 }
 
@@ -197,12 +176,11 @@ fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let _buffer: gtk::TextBuffer = builder.object("textbuffer1").unwrap();
 
     let qos_0_rb: gtk::RadioButton = builder.object("qos_0_rb_subscribe").unwrap();
-    let qos_1_rb: gtk::RadioButton = builder.object("qos_1_rb_subscribe").unwrap();
 
     subscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
         let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(
             (&topic_subscribe_entry.text()).to_string(), qos_0_rb.is_active()));
-        sender.send(event_subscribe);
+        sender.send(event_subscribe).unwrap();
     }));
 }
 
@@ -215,6 +193,6 @@ fn handle_unsubscribe(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         unsubs_packet.add_topic((&unsubscribe_topic_entry.text()).to_string());
 
         let event_unsubscribe = EventHandlers::HandleUnsubscribe(HandleUnsubscribe::new(unsubs_packet));
-        sender.send(event_unsubscribe);
+        sender.send(event_unsubscribe).unwrap();
     }));
 }
