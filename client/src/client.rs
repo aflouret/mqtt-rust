@@ -50,6 +50,7 @@ impl Client {
     pub fn start_client(mut self, recv_connection: Receiver<EventHandlers>, sender_to_window: Sender<ResponseHandlers>) -> Result<(), Box<dyn std::error::Error>> {
         let recv_connection = Arc::new(Mutex::new(recv_connection));
         loop{
+            //probando
             self.run_gui_processor(recv_connection.clone(), sender_to_window.clone())?;
         }
     }
