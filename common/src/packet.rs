@@ -13,7 +13,6 @@ use crate::parser::decode_mqtt_string;
 use std::io::{Read, Write, Error, ErrorKind::Other};
 
 const PACKET_TYPE_BYTE: u8 = 0xF0;
-pub const SOCKET_CLOSED_ERROR_MSG: &str = "Socket cerrado";
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -79,7 +78,7 @@ impl Packet {
         let mut indetifier_byte = [0u8; 1];
         let read_bytes = stream.read(&mut indetifier_byte)?;
         if read_bytes == 0 {
-            return Err(SOCKET_CLOSED_ERROR_MSG.into());
+            return Err("Socket desconectado".into());
         }
         match indetifier_byte[0] & PACKET_TYPE_BYTE {
             CONNECT_PACKET_TYPE => Connect::read_from(stream, indetifier_byte[0]),
