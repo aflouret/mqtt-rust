@@ -23,6 +23,7 @@ use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 mod client;
 mod handlers;
 mod response;
+mod puback_processor_client;
 
 // -> Result<(), Box<dyn std::error::Error>>
 /*
