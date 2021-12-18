@@ -1,13 +1,13 @@
 use crate::session::Session;
 use crate::topic_filters;
 use crate::puback_processor::PubackProcessor;
-use common::all_packets::connack::Connack;
+use crate::authenticator::Authenticator;
+use common::all_packets::connack::{Connack, CONNACK_BAD_USERNAME_OR_PASSWORD, CONNACK_CONNECTION_ACCEPTED};
 use common::all_packets::connect::Connect;
 use common::all_packets::unsuback::Unsuback;
 use common::all_packets::unsubscribe::Unsubscribe;
 use common::packet::{Packet, Qos};
 use std::collections::HashMap;
-use std::time::Duration;
 use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::puback::Puback;
 use std::sync::{Mutex, mpsc};
@@ -15,11 +15,12 @@ use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::thread::{self, JoinHandle};
 use std::sync::{RwLock, Arc};
 use common::logging::logger::{Logger, LogMessage};
-use common::all_packets::suback::{Suback, SubackReturnCode, SUCCESS_MAX_QOS_0};
-use common::all_packets::suback::SubackReturnCode::SuccessAtMostOnce;
+use common::all_packets::suback::{Suback, SubackReturnCode};
 use common::all_packets::subscribe::Subscribe;
 use common::all_packets::pingreq::Pingreq;
 use common::all_packets::pingresp::Pingresp;
+use std::io::{Error, ErrorKind};
+use std::time::Duration;
 
 const PACKETS_ID: u16 = 100;
 
@@ -37,6 +38,7 @@ pub struct PacketProcessor {
     logger: Arc<Logger>,
     retained_messages: HashMap<String, Message>,
     packets_id: HashMap<u16, bool>,
+    authenticator: Authenticator
     //qos_1_senders: HashMap<u16, Sender<()>>,
 }
 
@@ -50,6 +52,7 @@ impl PacketProcessor {
         for i in 0..PACKETS_ID {
             packets.insert(i, false);
         }
+        let authenticator = Authenticator::from("accounts.txt".to_string()).unwrap();
         PacketProcessor {
             sessions: HashMap::<String, Session>::new(),
             rx,
@@ -60,6 +63,7 @@ impl PacketProcessor {
             retained_messages: HashMap::<String, Message>::new(),
             packets_id: packets,
             //qos_1_senders: HashMap::<u16, Sender<()>>::new(),
+            authenticator: authenticator,
         }
     }
 
@@ -71,7 +75,6 @@ impl PacketProcessor {
                 let puback_processor = PubackProcessor::new(senders_to_c_h_writers, rx_from_packet_processor);
                 puback_processor.run();
             });
-
 
             loop {
                 if let Ok((c_h_id, packet)) = self.rx.recv() {
@@ -129,10 +132,20 @@ impl PacketProcessor {
         if let Some(_) = session.last_will_msg {
             // Mandamos el publish con el last will msg al last will topic
             let mut p = None;
+            if let Some(level) = session.last_will_qos {
+                if level == Qos::AtLeastOnce {
+                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                        p = Some(packet_id);
+                        self.packets_id.insert(packet_id, true);
+                    }
+                }
+            }
+            /*
             if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
                 p = Some(packet_id);
                 self.packets_id.insert(packet_id, true);
             }
+            */
             
             // Mandamos el publish a los suscriptores 
             //TODO: solo hacer si es que hay last will
@@ -209,13 +222,42 @@ impl PacketProcessor {
         };
 
         if let Some(response_packet) = response_packet {
-            self.send_packet_to_client_handler(c_h_id, response_packet);
+            //Si es un Ok(Packet::Connack(connack)) con return code != 0, se envia el connack y se procede a desconectar al cliente
+            match &response_packet{
+                Ok(Packet::Connack(connack)) => {
+                    let conn = connack.clone();
+                    self.send_packet_to_client_handler(c_h_id, response_packet)?;
+                    if conn.connect_return_code != CONNACK_CONNECTION_ACCEPTED {
+                        self.handle_disconnect(c_h_id);
+                    } else {
+                        self.send_unacknowledged_messages(c_h_id); 
+                    }
+                }
+                _ => self.send_packet_to_client_handler(c_h_id, response_packet)?
+            }
+            //self.send_packet_to_client_handler(c_h_id, response_packet);
         }
 
         Ok(())
     }
 
     pub fn handle_connect_packet(&mut self, connect_packet: Connect, client_handler_id: u32) -> Result<Connack, Box<dyn std::error::Error>> {
+        //Authentication 
+        if let Some(password) = &connect_packet.connect_payload.password {
+            match &connect_packet.connect_payload.username {
+                None => {
+                    return Err(Box::new(Error::new(ErrorKind::Other, "Invalid Packet: Contains password but no username")))
+                },
+                Some(username) => {
+                    if !self.authenticator.account_is_valid(&username, password){
+                        println!("Invalid Acount: sending Connack packet with error code");
+                        return Ok(Connack::new(false, CONNACK_BAD_USERNAME_OR_PASSWORD))
+                    }
+                },
+            }
+        }
+        println!("Valid Account");
+
         let client_id = connect_packet.connect_payload.client_id.to_owned();
         let clean_session = connect_packet.clean_session;
         let exists_previous_session = self.sessions.contains_key(&client_id);
@@ -238,12 +280,6 @@ impl PacketProcessor {
         }
         let current_session = self.sessions.get_mut(&client_id).unwrap();
         current_session.connect(client_handler_id);
-
-        // Mandamos los unacknowledged_messages que haya, si los hay, en la session
-        let mut unacknowledged_messages_copy = current_session.unacknowledged_messages.clone();
-        // (Sólo nos quedamos con los packets que recién dieron error al mandarlos de vuelta)
-        unacknowledged_messages_copy.retain(|publish| self.handle_publish_packet(publish.clone()).is_err() );
-        self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
 
         // Enviamos el connack con 0 return code y el correspondiente flag de session_present:
         // si hay clean_session, session_present debe ser false. Sino, depende de si ya teníamos sesión
@@ -283,8 +319,8 @@ impl PacketProcessor {
     pub fn handle_subscribe_packet(&mut self, subscribe_packet: Subscribe, c_h_id: u32) -> Result<Suback, Box<dyn std::error::Error>> {
         println!("Se recibió el subscribe packet");
 
-        let mut client_id = self.get_client_id_from_handler_id(c_h_id);
-        let mut session;
+        let client_id = self.get_client_id_from_handler_id(c_h_id);
+        let session;
         if let Some(client_id) = client_id {
             session = self.sessions.get_mut(&client_id).unwrap();
         } else {
@@ -293,7 +329,7 @@ impl PacketProcessor {
 
         let mut suback_packet = Suback::new(subscribe_packet.packet_id);
         for subscription in subscribe_packet.subscriptions {
-            if /*subscription_is_valid()*/true == false {
+            if topic_filters::topic_filter_is_valid(&subscription.topic_filter) == false {
                 let return_code = SubackReturnCode::Failure;
                 suback_packet.add_return_code(return_code);
             } else {
@@ -306,19 +342,32 @@ impl PacketProcessor {
             }
 
             //Retain Logic Subscribe
-
-            if let Some(message) = self.retained_messages.keys().find(|topic|
+            if let Some(topic) = self.retained_messages.keys().find(|topic|
                 topic_filters::filter_matches_topic(&subscription.topic_filter, topic)
             ) {
+
+                let mut flags = 0b0011_0001;
+                let mut id = None;
+                if subscription.max_qos == Qos::AtLeastOnce && self.retained_messages.get(topic).unwrap().qos == Qos::AtLeastOnce{
+                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                        self.packets_id.insert(packet_id, true);
+                        id = Some(packet_id); 
+                    }
+                    
+                    
+                    flags = 0b0011_0011;
+                }    
+
                 //Send publish al cliente con el mensaje en el retained_messages
                 let publish_packet = Publish::new(
-                    PublishFlags::new(0b0011_0011),
+                    PublishFlags::new(flags),
                     subscription.topic_filter,
-                    Some(1),
-                    self.retained_messages.get(message).unwrap().message.to_string(),
+                    id,
+                    self.retained_messages.get(topic).unwrap().message.to_string(),
                 );
                 println!("Publish a mandar: {:?}", &publish_packet);
 
+                
                 let senders_hash = self.senders_to_c_h_writers.read().unwrap();
                 let sender = senders_hash.get(&c_h_id).unwrap();
                 let sender_mutex_guard = sender.lock().unwrap();
@@ -378,8 +427,6 @@ impl PacketProcessor {
     fn handle_publish_packet_qos1(&mut self, publish_packet: Publish) -> Result<Option<Puback>, Box<dyn std::error::Error>> {
         let packet_id = publish_packet.packet_id;
 
-
-
         let mut publish_send = publish_packet.clone();
         publish_send.flags.duplicate = false;
         publish_send.flags.retain = false;
@@ -391,15 +438,28 @@ impl PacketProcessor {
         }
 
         for (_, session) in &self.sessions {
-            if session.is_subscribed_to(&publish_packet.topic_name) == Some(Qos::AtLeastOnce) {
-                if let Some(client_handler_id) = session.get_client_handler_id() {
-                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
-                        publish_send.packet_id = Some(packet_id);
-                        self.packets_id.insert(packet_id, true);
+            match session.is_subscribed_to(&publish_packet.topic_name){
+                Some(Qos::AtLeastOnce) => {
+                    if let Some(client_handler_id) = session.get_client_handler_id() {
+                        let mut publish_send_2 = publish_send.clone();
+                        publish_send_2.packet_id = packet_id;
+                        self.packets_id.insert(packet_id.unwrap(), true);
+                        
+                        self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())));
+                        self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send_2.clone())))).unwrap();
                     }
-                    self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send.clone())));
-                    self.tx_to_puback_processor.send((client_handler_id, Ok(Packet::Publish(publish_send.clone())))).unwrap();
-                }
+                },
+
+                Some(Qos::AtMostOnce) => {
+                    if let Some(client_handler_id) = session.get_client_handler_id() {
+                        let mut publish_send_2 = publish_send.clone();
+                        publish_send_2.packet_id = None;
+                        publish_send_2.flags.qos_level = Qos::AtMostOnce;
+                        self.send_packet_to_client_handler(client_handler_id, Ok(Packet::Publish(publish_send_2.clone())));
+                    }
+                },
+
+                _ => ()
             }
         }
 
@@ -413,7 +473,11 @@ impl PacketProcessor {
         self.tx_to_puback_processor.send((0, Ok(Packet::Puback(puback_packet))))?;
 
         for (_, session) in &mut self.sessions {
-            session.unacknowledged_messages.retain(|publish_packet| publish_packet.packet_id.unwrap() != puback_packet_id)
+            if session.is_active() {
+                session.unacknowledged_messages.retain(|publish_packet| {
+                    println!("packetid_publish: {:?} || packetid_puback: {:?}",publish_packet.packet_id.unwrap(), puback_packet_id);
+                    publish_packet.packet_id.unwrap() != puback_packet_id})
+            }
         }
 
         Ok(())
@@ -429,11 +493,12 @@ impl PacketProcessor {
         None
     }
 
-    fn send_packet_to_client_handler(&self, c_h_id: u32, packet: Result<Packet, Box<dyn std::error::Error + Send>>) {
+    fn send_packet_to_client_handler(&self, c_h_id: u32, packet: Result<Packet, Box<dyn std::error::Error + Send>>) -> Result<(), Box<dyn std::error::Error>>{
         let senders_hash = self.senders_to_c_h_writers.read().unwrap();
         let sender = senders_hash.get(&c_h_id).unwrap();
         let sender_mutex_guard = sender.lock().unwrap();
-        sender_mutex_guard.send(packet).unwrap();
+        sender_mutex_guard.send(packet)?;
+        Ok(())
     }
 
     fn find_key_for_value(map: HashMap<u16, bool>, value: bool) -> Option<u16> {
@@ -443,5 +508,22 @@ impl PacketProcessor {
             }
         }
         None
+    }
+
+    fn send_unacknowledged_messages(&mut self, c_h_id: u32){
+        if let Some(client_id) = self.get_client_id_from_handler_id(c_h_id){       
+
+            //thread::sleep(Duration::from_millis(100));
+        
+            let current_session = self.sessions.get_mut(&client_id).unwrap();
+            let mut unacknowledged_messages_copy = current_session.unacknowledged_messages.clone();
+            unacknowledged_messages_copy.retain(
+                |publish| {
+                    println!("Envio el publish: {:?}", publish.application_message);
+                    self.send_packet_to_client_handler(c_h_id, Ok(Packet::Publish(publish.clone()))).is_err()
+                }
+            );
+            self.sessions.get_mut(&client_id).unwrap().unacknowledged_messages = unacknowledged_messages_copy;
+        }
     }
 }
