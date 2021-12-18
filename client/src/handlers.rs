@@ -8,6 +8,7 @@ pub enum EventHandlers {
     HandleSubscribe(HandleSubscribe),
     HandleUnsubscribe(HandleUnsubscribe),
     HandleDisconnect(HandleDisconnect),
+    HandleInternPacketId(HandleInternPacketId)
 }
 
 #[derive(Debug)]
@@ -103,5 +104,16 @@ impl HandleDisconnect {
     pub fn new(disconnect_packet: Disconnect) -> Self {
         println!("disconnect");
         Self { disconnect_packet: disconnect_packet }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HandleInternPacketId {
+    pub packet_id: u16,
+}
+
+impl HandleInternPacketId {
+    pub fn new(packet_id: u16) -> Self {
+        Self { packet_id: packet_id }
     }
 }
