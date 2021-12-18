@@ -1,6 +1,5 @@
-use std::thread::JoinHandle;
 use std::{thread};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use crate::client::Client;
 
@@ -30,7 +29,6 @@ mod puback_processor_client;
     //Sender: Client envía a Window , Recv: Window recibe data a mostrar
     let (sender_cli, recv_window) = mpsc::channel::<Packet>();
  */
-
 fn main() {
     let application = gtk::Application::new(None, Default::default());
     application.connect_activate(|app| {
@@ -39,7 +37,7 @@ fn main() {
         let builder = build_ui(app);
         setup(builder, sender_conection.clone(), window_recv);
         thread::spawn(move || {
-            let client = Client::new();
+            let client = Client::new("User".to_owned()); 
             client.start_client(recv_conection, client_sender, sender_conection).unwrap();
         });
     });
@@ -118,49 +116,20 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let last_will_retain: gtk::CheckButton = builder.object("last_will_retain_check").unwrap();
     let last_will_qos: gtk::CheckButton = builder.object("last_will_qos_check").unwrap();
 
-    ip_entry.set_text("127.0.0.1");
-    port_entry.set_text("8080");
-    keep_alive_entry.set_text("300");
-
     let sender_for_disconnect = sender.clone();
     connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
         let address = (&ip_entry.text()).to_string() + ":" + &*(&port_entry.text()).to_string();
         let a  = clean_session.is_active();
         let b = last_will_retain.is_active();
         let c = last_will_qos.is_active();
-
-        let mut username: Option<String> = None;
-        if (&username_entry.text()).to_string() != "" {
-            username = Some((&username_entry.text()).to_string());
-        }
-
-        let mut password: Option<String> = None;
-        if (&password_entry.text()).to_string() != "" {
-            password = Some((&password_entry.text()).to_string());
-        }
-
-        let mut last_will_msg: Option<String> = None;
-        if (&last_will_msg_entry.text()).to_string() != "" {
-            last_will_msg = Some((&last_will_msg_entry.text()).to_string());
-        }
-
-        let mut last_will_topic: Option<String> = None;
-        if (&last_will_topic_entry.text()).to_string() != "" {
-            last_will_topic = Some((&last_will_topic_entry.text()).to_string());
-        }
-
         let event_conection = EventHandlers::HandleConection(HandleConection::
             new(address.clone(),(&client_id_entry.text()).to_string(),
                 a, b, c,
                 (&keep_alive_entry.text()).to_string(),
-                //Some((&username_entry.text()).to_string()),
-                //Some((&password_entry.text()).to_string()),
-                //Some((&last_will_msg_entry.text()).to_string()),
-                //Some((&last_will_topic_entry.text()).to_string()),
-                username,
-                password,
-                last_will_msg,
-                last_will_topic
+                Some((&username_entry.text()).to_string()),
+                Some((&password_entry.text()).to_string()),
+                Some((&last_will_msg_entry.text()).to_string()),
+                Some((&last_will_topic_entry.text()).to_string()),
         ));
         sender.send(event_conection).unwrap();
 /*        username_entry.set_text("");
@@ -203,6 +172,8 @@ fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let qos_1_rb: gtk::RadioButton = builder.object("qos_1_rb_subscribe").unwrap();
 
     subscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
+        println!("QOS0: {:?}", qos_0_rb.is_active());
+        println!("QOS1: {:?}", qos_1_rb.is_active());
         let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(
             (&topic_subscribe_entry.text()).to_string(), qos_0_rb.is_active()));
         sender.send(event_subscribe);
