@@ -11,6 +11,9 @@ use std::sync::mpsc::Sender;
 use std::sync::{mpsc, Mutex};
 use std::sync::{Arc, RwLock};
 
+pub type PacketResult = Result<Packet, Box<dyn std::error::Error + Send>>;
+pub type ArcSenderPacket = Arc<Mutex<Sender<PacketResult>>>;
+
 pub struct Server {
     config: Config,
     logger: Arc<Logger>,
@@ -31,10 +34,10 @@ impl Server {
         ))?;
         let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<
             u32,
-            Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>,
+            ArcSenderPacket,
         >::new()));
         let (c_h_reader_tx, packet_proc_rx) =
-            mpsc::channel::<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>();
+            mpsc::channel::<(u32, PacketResult)>();
 
         let packet_processor = PacketProcessor::new(
             packet_proc_rx,
@@ -54,29 +57,29 @@ impl Server {
         listener: TcpListener,
         senders_to_c_h_writers: Arc<
             RwLock<
-                HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>,
+                HashMap<u32, ArcSenderPacket>,
             >,
         >,
-        c_h_reader_tx: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
+        c_h_reader_tx: Sender<(u32, PacketResult)>,
     ) {
-        let mut id: u32 = 0;
+        //let mut id: u32 = 0;
         let mut join_handles = vec![];
 
-        for stream in listener.incoming() {
-            if let Ok(stream) = stream {
-                let client_handler = ClientHandler::new(
-                    id,
-                    stream,
-                    senders_to_c_h_writers.clone(),
-                    c_h_reader_tx.clone(),
-                );
+        for (id, stream) in listener.incoming().flatten().enumerate() {
+            //if let Ok(stream) = stream {
+            let client_handler = ClientHandler::new(
+                id as u32,
+                stream,
+                senders_to_c_h_writers.clone(),
+                c_h_reader_tx.clone(),
+            );
 
-                if let Ok(join_handle) = client_handler.run() {
-                    join_handles.push(join_handle);
-                };
+            if let Ok(join_handle) = client_handler.run() {
+                join_handles.push(join_handle);
+            };
 
-                id += 1;
-            }
+                //id += 1;
+            //}
         }
 
         for handle in join_handles {

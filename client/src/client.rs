@@ -60,7 +60,7 @@ impl Client {
         loop {
             if let Ok(conection) = recv_connection.recv() {
                 match conection {
-                    EventHandlers::HandleConection(conec) => {
+                    EventHandlers::Conection(conec) => {
                         self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec, sender_intern.clone()).unwrap();
                         println!("Connected Client");
                         break;
@@ -76,21 +76,21 @@ impl Client {
             }
             
             match recv_connection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
-                Ok(EventHandlers::HandleConection(conec)) => {
+                Ok(EventHandlers::Conection(conec)) => {
                     self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec,sender_intern.clone() ).unwrap();
                 }
 
-                Ok(EventHandlers::HandlePublish(publish)) => {
+                Ok(EventHandlers::Publish(publish)) => {
                     //escuchar el pbuack processor para reenviar publish
                     self.handle_publish(publish).unwrap();
                 }
-                Ok(EventHandlers::HandleSubscribe(subscribe)) => {
+                Ok(EventHandlers::Subscribe(subscribe)) => {
                     self.handle_subscribe(subscribe).unwrap();
                 }
-                Ok(EventHandlers::HandleUnsubscribe(unsubs)) => {
+                Ok(EventHandlers::Unsubscribe(unsubs)) => {
                     self.handle_unsubscribe(unsubs).unwrap();
                 }
-                Ok(EventHandlers::HandleDisconnect(disconnect)) => {
+                Ok(EventHandlers::Disconnect(disconnect)) => {
                     self.handle_disconnect(disconnect).unwrap();
                     return Ok(())
                 }
@@ -125,7 +125,7 @@ impl Client {
                         sender.send(puback_response).unwrap();
                         thread::sleep(Duration::new(2,0));
                         sender.send(ResponseHandlers::PubackResponse(PubackResponse::new("".to_string()))).unwrap();
-                        let intern = EventHandlers::HandleInternPacketId(HandleInternPacketId::new(puback.packet_id));
+                        let intern = EventHandlers::InternPacketId(HandleInternPacketId::new(puback.packet_id));
                         sender_intern.send(intern).unwrap();
                         println!("CLIENT: Packet id enviado internamente para liberar");
                         //sender.send("Topic Successfully published".to_string());
@@ -133,7 +133,7 @@ impl Client {
                     }
                     Ok(Packet::Suback(suback)) => {
                         println!("CLIENT: SUBACK packet successful received");
-                        let intern = EventHandlers::HandleInternPacketId(HandleInternPacketId::new(suback.packet_id));
+                        let intern = EventHandlers::InternPacketId(HandleInternPacketId::new(suback.packet_id));
                         sender_intern.send(intern).unwrap();
                         //liberar el packet id que nos mandan
                     }
@@ -299,16 +299,17 @@ impl Client {
         let mut socket = TcpStream::connect(address.clone()).unwrap();
         let keep_alive_time = conec.keep_alive_second.parse().unwrap();
         println!("Connecting to: {:?}", address);
+        println!("Client id: {:?}", conec.client_id);
         
         let connect_packet = Connect::new(
             ConnectPayload::new(conec.client_id, 
-                conec.last_will_topic,
-                conec.last_will_msg, 
+                conec.last_will.last_will_topic,
+                conec.last_will.last_will_msg, 
                 conec.username, conec.password),
                 keep_alive_time,
             conec.clean_session, 
-            conec.last_will_retain, 
-            conec.last_will_qos);
+            conec.last_will.last_will_retain, 
+            conec.last_will.last_will_qos);
         
 
         let mut max_wait_time_for_connack = MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE; 
@@ -317,9 +318,9 @@ impl Client {
         } 
         socket.set_read_timeout(Some(Duration::new(max_wait_time_for_connack, 0))).unwrap();
         
-        Client::handle_response(socket.try_clone().unwrap(), sender_to_window, sender_intern.clone());
+        Client::handle_response(socket.try_clone().unwrap(), sender_to_window, sender_intern);
 
-        *keep_alive_sec = keep_alive_time.clone();
+        *keep_alive_sec = keep_alive_time;
         println!("CLIENT: Send connect packet: {:?}", &connect_packet);
         connect_packet.write_to(&mut socket)?;
         self.set_server_stream(socket);

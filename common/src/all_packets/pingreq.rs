@@ -36,14 +36,20 @@ impl ReadPacket for Pingreq {
         let remaining_length = decode_remaining_length(stream)?;
         verify_remaining_length_byte(&remaining_length)?;
 
-        Ok(Packet::Pingreq(Pingreq{}))
+        Ok(Packet::Pingreq(Pingreq::new()))
+    }
+}
+
+impl Default for Pingreq {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 fn verify_disconnect_byte(byte: &u8) -> Result<(), String>{
     match *byte {
-        PINGREQ_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        PINGREQ_PACKET_TYPE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

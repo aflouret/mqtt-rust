@@ -123,7 +123,7 @@ impl ReadPacket for Publish {
     }
 }
 
-fn verify_topic_name_withoud_wildcards(topic_name: &String)-> Result<(), String> {
+fn verify_topic_name_withoud_wildcards(topic_name: &str)-> Result<(), String> {
     //The Topic Name in the PUBLISH Packet MUST NOT contain wildcard characters: ‘#’, ‘+’, '$'
     if topic_name.contains('#') || topic_name.contains('$') || topic_name.contains('+'){
         return Err("The Topic name contains a wildcard".to_string());
@@ -134,8 +134,8 @@ fn verify_topic_name_withoud_wildcards(topic_name: &String)-> Result<(), String>
 
 fn verify_publish_byte(byte: &u8) -> Result<(), String>{
     match *byte & 0xF0 {
-        PUBLISH_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        PUBLISH_PACKET_TYPE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

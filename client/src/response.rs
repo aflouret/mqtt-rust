@@ -17,7 +17,7 @@ pub struct PublishResponse {
 
 impl PublishResponse {
     pub fn new(publish_packet: Publish, msgs: Vec<String>, msg_correct: String) -> Self {
-        Self{publish_packet: publish_packet, msgs: msgs, msg_correct: msg_correct }
+        Self{publish_packet, msgs, msg_correct }
     }
 
 }
@@ -30,7 +30,7 @@ pub struct PubackResponse {
 
 impl PubackResponse {
     pub fn new(msg: String) -> Self {
-        Self{msg: msg}
+        Self{msg}
     }
 
 }

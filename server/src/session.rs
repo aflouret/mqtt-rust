@@ -64,7 +64,7 @@ impl Session {
     pub fn disconnect(&mut self) {
         self.client_handler_id = None;
 
-        if let Some(_) = self.last_will_msg {
+        if self.last_will_msg.is_some() {
             self.last_will_msg = None;
             self.last_will_topic = None;
             self.last_will_qos = None;
@@ -72,13 +72,13 @@ impl Session {
         }
     }
 
-    pub fn is_subscribed_to(&self, topic_name: &String) -> Option<Qos> {
+    pub fn is_subscribed_to(&self, topic_name: &str) -> Option<Qos> {
         for subscription in &self.client_subscriptions {
             if topic_filters::filter_matches_topic(&subscription.topic_filter, topic_name) {
                 return Some(subscription.max_qos);
             }
         }
-        return None;
+        None
     }
 
     pub fn add_subscription(&mut self, mut subscription: Subscription) {

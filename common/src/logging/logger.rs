@@ -17,7 +17,7 @@ impl Logger {
             thread::spawn(move || loop {
                 let msg = receiver.recv();
                 if let Ok(m) = msg {
-                    file.write(m.msg_to_string().as_bytes()).unwrap();
+                    file.write_all(m.msg_to_string().as_bytes()).unwrap();
                 }
             });
 
@@ -56,8 +56,7 @@ impl LogMessage {
     }
 
     pub fn msg_to_string(self) -> String {
-        let s = self.message + " " + &*self.client_id + "\n";
-        return s.to_string();
+        self.message + " " + &*self.client_id + "\n"
     }
 }
 

@@ -58,15 +58,15 @@ impl ReadPacket for Unsuback {
 
 fn verify_remaining_length_byte(byte: &u32) -> Result<(), String> {
     if *byte != UNSUBACK_REMAINING_LENGTH {
-        return Err("Incorrect Remaining Length".into());
+        return Err("Incorrect Remaining Length".to_string());
     }
     Ok(())
 }
 
 fn verify_unsuback_byte(byte: &u8) -> Result<(), String>{
     match *byte {
-        UNSUBACK_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        UNSUBACK_PACKET_TYPE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

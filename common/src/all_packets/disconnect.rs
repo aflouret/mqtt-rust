@@ -36,7 +36,13 @@ impl ReadPacket for Disconnect {
         let remaining_length = decode_remaining_length(stream)?;
         verify_remaining_length_byte(&remaining_length)?;
 
-        Ok(Packet::Disconnect(Disconnect{}))
+        Ok(Packet::Disconnect(Disconnect::new()))
+    }
+}
+
+impl Default for Disconnect {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -49,8 +55,8 @@ fn verify_remaining_length_byte(byte: &u32) -> Result<(), String> {
 
 fn verify_disconnect_byte(byte: &u8) -> Result<(), String>{
     match *byte {
-        DISCONNECT_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        DISCONNECT_PACKET_TYPE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

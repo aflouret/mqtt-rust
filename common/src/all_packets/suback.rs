@@ -24,7 +24,7 @@ impl SubackReturnCode {
             SUCCESS_MAX_QOS_0 => Ok(SubackReturnCode::SuccessAtMostOnce),
             SUCCESS_MAX_QOS_1 => Ok(SubackReturnCode::SuccessAtLeastOnce),
             FAILURE => Ok(SubackReturnCode::Failure),
-            _ => return Err(Error::new(Other, "Invalid Return Code"))
+            _ => Err(Error::new(Other, "Invalid Return Code"))
         }
     }
 }
@@ -105,18 +105,18 @@ impl ReadPacket for Suback {
             }
         }
 
-        if suback_packet.return_codes.len() == 0 {
-            return Err(Box::new(Error::new(Other, "Suback can't have an empty return code list")));
+        if suback_packet.return_codes.is_empty() {
+            Err(Box::new(Error::new(Other, "Suback can't have an empty return code list")))
         } else {
-            return Ok(Packet::Suback(suback_packet));
+            Ok(Packet::Suback(suback_packet))
         }
     }
 }
 
 fn verify_suback_byte(byte: &u8) -> Result<(), String>{
     match *byte {
-        SUBACK_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        SUBACK_PACKET_TYPE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

@@ -10,7 +10,7 @@ pub fn filter_matches_topic(filter: &str, topic_name: &str) -> bool {
         return match_levels(&filter_levels[..index], &topic_name_levels[..index]);
     }
 
-    return match_levels(&filter_levels, &topic_name_levels);
+    match_levels(&filter_levels, &topic_name_levels)
 }
 
 fn match_levels(filter: &[&str], topic: &[&str]) -> bool {
@@ -24,7 +24,8 @@ fn match_levels(filter: &[&str], topic: &[&str]) -> bool {
             return false;
         }
     }
-    return true;
+    
+    true
 }
 
 pub fn topic_filter_is_valid(filter: &str) -> bool {

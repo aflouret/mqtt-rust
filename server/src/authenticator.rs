@@ -18,7 +18,7 @@ impl Authenticator {
 
         for line in reader.lines() {
             let line = line.unwrap();
-            let vec: Vec<&str> = line.split(";").collect();
+            let vec: Vec<&str> = line.split(';').collect();
             if vec.len() != 2 {
                 return Err(Error::new(ErrorKind::Other, "Incorrect format"));
             }
@@ -35,7 +35,7 @@ impl Authenticator {
         Ok(Authenticator::new(hash))
     }
 
-    pub fn account_is_valid(&self, username: &String, password: &String) -> bool {
+    pub fn account_is_valid(&self, username: &str, password: &str) -> bool {
         match self.accounts.get(username) {
             None => false,
             Some(pass) => pass == password,
@@ -48,7 +48,6 @@ impl Authenticator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Cursor, Read, Write};
 
     #[test]
     fn valid_account_returns_true() {

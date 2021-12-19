@@ -65,8 +65,8 @@ impl ReadPacket for Puback {
 
 fn verify_puback_byte(byte: &u8) -> Result<(), String>{
     match *byte {
-        PUBACK_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        PUBACK_PACKET_TYPE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

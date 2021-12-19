@@ -29,3 +29,9 @@ impl Config {
         self.log_filename.to_string()
     }
 }
+
+impl Default for Config{
+    fn default() -> Self {
+        Self::new()
+    }
+}

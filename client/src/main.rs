@@ -10,12 +10,8 @@ use common::all_packets::disconnect::Disconnect;
 use glib::clone;
 use gtk::prelude::*;
 use common::all_packets::unsubscribe::{Unsubscribe};
-use handlers::HandleDisconnect;
-use crate::handlers::EventHandlers;
-use crate::handlers::HandleConection;
-use crate::handlers::HandlePublish;
-use crate::handlers::HandleSubscribe;
-use crate::handlers::HandleUnsubscribe;
+use crate::handlers::{EventHandlers, HandleConection, HandlePublish,
+     HandleSubscribe, HandleUnsubscribe, HandleDisconnect, LastWillInfo};
 use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 
 mod client;
@@ -31,7 +27,7 @@ fn main() {
         setup(builder, sender_connection.clone(), window_recv);
         thread::spawn(move || {
             let client = Client::new(); 
-            client.start_client(recv_connection, client_sender, sender_connection.clone()).unwrap();
+            client.start_client(recv_connection, client_sender, sender_connection).unwrap();
         });
     });
 
@@ -77,7 +73,7 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
     intern_recv.attach(None, move |response: ResponseHandlers| {
         match response {
             ResponseHandlers::PublishResponse(publish) => {
-                if let Some(msg) = publish.msgs.get(publish.msgs.len() - 1) {
+                if let Some(msg) = publish.msgs.last() {
                     joined_string += msg;
                 }
                 buffer.set_text(&joined_string);
@@ -117,40 +113,39 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         let c = last_will_qos.is_active();
 
         let mut username: Option<String> = None;
-        if (&username_entry.text()).to_string() != "" {
+        if &username_entry.text() != "" {
             username = Some((&username_entry.text()).to_string());
         }
 
         let mut password: Option<String> = None;
-        if (&password_entry.text()).to_string() != "" {
+        if &password_entry.text() != "" {
             password = Some((&password_entry.text()).to_string());
         }
 
         let mut last_will_msg: Option<String> = None;
-        if (&last_will_msg_entry.text()).to_string() != "" {
+        if &last_will_msg_entry.text() != "" {
             last_will_msg = Some((&last_will_msg_entry.text()).to_string());
         }
 
         let mut last_will_topic: Option<String> = None;
-        if (&last_will_topic_entry.text()).to_string() != "" {
+        if &last_will_topic_entry.text() != "" {
             last_will_topic = Some((&last_will_topic_entry.text()).to_string());
         }
 
-        let event_conection = EventHandlers::HandleConection(HandleConection::
-            new(address.clone(),(&client_id_entry.text()).to_string(),
-                a, b, c,
+        let event_conection = EventHandlers::Conection(HandleConection::
+            new(address,(&client_id_entry.text()).to_string(),
+                a,
                 (&keep_alive_entry.text()).to_string(),
                 username,
                 password,
-                last_will_msg,
-                last_will_topic
+                LastWillInfo::new(last_will_topic, last_will_msg, c, b)
         ));
         sender.send(event_conection).unwrap();
         }));
 
     let disconnect_button: gtk::Button = builder.object("disconnect_button").unwrap();
     disconnect_button.connect_clicked(clone! (@weak disconnect_button => move |_| {
-        let event_disconection = EventHandlers::HandleDisconnect(HandleDisconnect::new(Disconnect::new()));
+        let event_disconection = EventHandlers::Disconnect(HandleDisconnect::new(Disconnect::new()));
         sender_for_disconnect.send(event_disconection).unwrap();
     }));
 }
@@ -163,7 +158,7 @@ fn handle_publish_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let retain_checkbox: gtk::CheckButton = builder.object("retain_checkbox").unwrap();
     let publish_button: gtk::Button = builder.object("publish_button").unwrap();
     publish_button.connect_clicked(clone!( @weak topic_pub_entry => move |_| {
-        let event_publish = EventHandlers::HandlePublish(HandlePublish::new(
+        let event_publish = EventHandlers::Publish(HandlePublish::new(
             (&topic_pub_entry.text()).to_string(),(&app_msg_entry.text()).to_string(),
             qos_0_rb.is_active(), qos_1_rb.is_active(), retain_checkbox.is_active()));
         sender.send(event_publish).unwrap();
@@ -178,7 +173,7 @@ fn handle_subscribe_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let qos_0_rb: gtk::RadioButton = builder.object("qos_0_rb_subscribe").unwrap();
 
     subscribe_button.connect_clicked(clone!( @weak topic_subscribe_entry => move |_| {
-        let event_subscribe = EventHandlers::HandleSubscribe(HandleSubscribe::new(
+        let event_subscribe = EventHandlers::Subscribe(HandleSubscribe::new(
             (&topic_subscribe_entry.text()).to_string(), qos_0_rb.is_active()));
         sender.send(event_subscribe).unwrap();
     }));
@@ -192,7 +187,7 @@ fn handle_unsubscribe(builder: gtk::Builder, sender: Sender<EventHandlers>) {
         let mut unsubs_packet = Unsubscribe::new(10);
         unsubs_packet.add_topic((&unsubscribe_topic_entry.text()).to_string());
 
-        let event_unsubscribe = EventHandlers::HandleUnsubscribe(HandleUnsubscribe::new(unsubs_packet));
+        let event_unsubscribe = EventHandlers::Unsubscribe(HandleUnsubscribe::new(unsubs_packet));
         sender.send(event_unsubscribe).unwrap();
     }));
 }

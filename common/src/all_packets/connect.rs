@@ -215,7 +215,7 @@ fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), 
     Ok(())
 }
 
-fn verify_client_id(client_id: &String) -> Result<(), Box<dyn std::error::Error>>{
+fn verify_client_id(client_id: &str) -> Result<(), Box<dyn std::error::Error>>{
     if ! client_id.chars().all(|c| ALLOWED_CHARS_CLIENT_ID.contains(c))
     || ! ALLOWED_RANGE_CLIENT_ID.contains(&client_id.chars().count()) {
         println!("El client id ingresado es inválido");

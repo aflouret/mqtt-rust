@@ -32,7 +32,7 @@ impl Unsubscribe {
 
         //PAYLOAD
         for topic in &self.topics {
-            length += encode_mqtt_string(&topic)?.len() as u8;
+            length += encode_mqtt_string(topic)?.len() as u8;
         }
 
         Ok(length as u32)
@@ -57,7 +57,7 @@ impl WritePacket for Unsubscribe {
 
         //PAYLOAD
         for topic in &self.topics {
-            let encoded_name = encode_mqtt_string(&topic)?;
+            let encoded_name = encode_mqtt_string(topic)?;
             for byte in &encoded_name {
                 stream.write_all(&[*byte])?;
             }
@@ -93,18 +93,18 @@ impl ReadPacket for Unsubscribe {
             }
         }
 
-        if packet_unsubscribe.topics.len() == 0 {
-            return Err(Box::new(Error::new(Other, "Unsubscribe can't have an empty topic list")));
+        if packet_unsubscribe.topics.is_empty() {
+            Err(Box::new(Error::new(Other, "Unsubscribe can't have an empty topic list")))
         } else {
-            return Ok(Packet::Unsubscribe(packet_unsubscribe));
+            Ok(Packet::Unsubscribe(packet_unsubscribe))
         }
     }
 }
 
 fn verify_unsubscribe_byte(byte: &u8) -> Result<(), String> {
     match *byte {
-        UNSUBSCRIBE_FIRST_BYTE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        UNSUBSCRIBE_FIRST_BYTE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

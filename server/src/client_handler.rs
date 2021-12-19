@@ -10,15 +10,16 @@ use std::sync::{mpsc, Mutex};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use crate::server::{PacketResult, ArcSenderPacket};
 
 const SOCKET_DISCONNECT_ERROR_MSG: &str = "Disconnectiong Socket due to Error";
 
 pub struct ClientHandler {
     id: u32,
     stream: Option<TcpStream>,
-    sender: Option<Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>>,
-    receiver: Option<Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>>,
-    reader_to_writer_tx: Sender<Result<Packet, Box<dyn std::error::Error + Send>>>,
+    sender: Option<Sender<(u32, PacketResult)>>,
+    receiver: Option<Receiver<PacketResult>>,
+    reader_to_writer_tx: Sender<PacketResult>,
 }
 
 impl ClientHandler {
@@ -27,13 +28,13 @@ impl ClientHandler {
         stream: TcpStream,
         senders_to_c_h_writers: Arc<
             RwLock<
-                HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>,
+                HashMap<u32, ArcSenderPacket>,
             >,
         >,
-        sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
+        sender: Sender<(u32, PacketResult)>,
     ) -> ClientHandler {
         let (server_tx, c_h_writer_rx) =
-            mpsc::channel::<Result<Packet, Box<dyn std::error::Error + Send>>>();
+            mpsc::channel::<PacketResult>();
         let sender_from_c_h_reader_to_c_h_w = server_tx.clone();
         let mut hash = senders_to_c_h_writers.write().unwrap();
         hash.insert(id, Arc::new(Mutex::new(server_tx)));
@@ -60,14 +61,14 @@ impl ClientHandler {
 
         let writer_join_handle = thread::spawn(move || {
             let reader_join_handle = thread::spawn(move || loop {
-                if let Err(_) = client_handler_reader.receive_packet() {
+                if client_handler_reader.receive_packet().is_err() {
                     println!("se elimina el reader");
                     break;
                 }
             });
 
             loop {
-                if let Err(_) = client_handler_writer.send_packet() {
+                if client_handler_writer.send_packet().is_err() {
                     println!("se elimina el writer");
                     break;
                 }
@@ -85,13 +86,13 @@ impl ClientHandler {
 struct ClientHandlerWriter {
     //Maneja la conexion del socket
     socket: TcpStream,
-    receiver: Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>, //Por acá recibe los paquetes que escribe en el socket
+    receiver: Receiver<PacketResult>, //Por acá recibe los paquetes que escribe en el socket
 }
 
 impl ClientHandlerWriter {
     pub fn new(
         socket: TcpStream,
-        receiver: Receiver<Result<Packet, Box<dyn std::error::Error + Send>>>,
+        receiver: Receiver<PacketResult>,
     ) -> ClientHandlerWriter {
         ClientHandlerWriter { socket, receiver }
     }
@@ -113,17 +114,17 @@ impl ClientHandlerWriter {
 struct ClientHandlerReader {
     id: u32,
     socket: TcpStream,
-    sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>, //Por acá manda paquetes al sv
+    sender: Sender<(u32, PacketResult)>, //Por acá manda paquetes al sv
     already_connected: bool,
-    reader_to_writer_tx: Sender<Result<Packet, Box<dyn std::error::Error + Send>>>,
+    reader_to_writer_tx: Sender<PacketResult>,
 }
 
 impl ClientHandlerReader {
     pub fn new(
         id: u32,
         socket: TcpStream,
-        sender: Sender<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
-        reader_to_writer_tx: Sender<Result<Packet, Box<dyn std::error::Error + Send>>>,
+        sender: Sender<(u32, PacketResult)>,
+        reader_to_writer_tx: Sender<PacketResult>,
     ) -> ClientHandlerReader {
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
         ClientHandlerReader {
@@ -164,7 +165,7 @@ impl ClientHandlerReader {
                 }
             }
             Err(error) => {
-                if error.to_string() == INCORRECT_PROTOCOL_LEVEL_ERROR_MSG.to_string() {
+                if error.to_string() == INCORRECT_PROTOCOL_LEVEL_ERROR_MSG {
                     println!("{}", error.to_string());
                     // [MQTT-3.1.2-2]. Enviamos un connack con 0x1 y desconectamos.
                     // [MQTT-3.2.2-4]. Por eso session_present = false

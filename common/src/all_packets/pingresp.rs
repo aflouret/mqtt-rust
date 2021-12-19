@@ -36,14 +36,20 @@ impl ReadPacket for Pingresp {
         let remaining_length = decode_remaining_length(stream)?;
         verify_remaining_length_byte(&remaining_length)?;
 
-        Ok(Packet::Pingresp(Pingresp{}))
+        Ok(Packet::Pingresp(Pingresp::new()))
+    }
+}
+
+impl Default for Pingresp {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 fn verify_disconnect_byte(byte: &u8) -> Result<(), String>{
     match *byte {
-        PINGRESP_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        PINGRESP_PACKET_TYPE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

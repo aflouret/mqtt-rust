@@ -81,8 +81,8 @@ impl ReadPacket for Connack {
 
 fn verify_connack_byte(byte: &u8) -> Result<(), String>{
     match *byte {
-        CONNACK_PACKET_TYPE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        CONNACK_PACKET_TYPE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

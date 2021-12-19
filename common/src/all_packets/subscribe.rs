@@ -93,18 +93,18 @@ impl ReadPacket for Subscribe {
             }
         }
 
-        if packet_subscribe.subscriptions.len() == 0 {
-            return Err(Box::new(Error::new(Other, "Subscribe can't have an empty topic list")));
+        if packet_subscribe.subscriptions.is_empty() {
+            Err(Box::new(Error::new(Other, "Subscribe can't have an empty topic list")))
         } else {
-            return Ok(Packet::Subscribe(packet_subscribe));
+            Ok(Packet::Subscribe(packet_subscribe))
         }
     }
 }
 
 fn verify_subscribe_byte(byte: &u8) -> Result<(), String>{
     match *byte {
-        SUBSCRIBE_FIRST_BYTE => return Ok(()),
-        _ => return Err("Wrong First Byte".to_string()),
+        SUBSCRIBE_FIRST_BYTE => Ok(()),
+        _ => Err("Wrong First Byte".to_string()),
     }
 }
 

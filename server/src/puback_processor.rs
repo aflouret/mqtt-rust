@@ -2,30 +2,29 @@ use common::all_packets::puback::Puback;
 use common::all_packets::publish::Publish;
 use common::packet::Packet;
 use std::collections::HashMap;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Mutex;
+use std::sync::mpsc::{Receiver};
 use std::sync::{Arc, RwLock};
-
 use std::time::{Duration, SystemTime};
+use crate::server::{PacketResult, ArcSenderPacket};
 
 pub struct PubackProcessor {
     publish_packets: Vec<(SystemTime, u32, Publish)>,
     senders_to_c_h_writers: Arc<
-        RwLock<HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>>,
+        RwLock<HashMap<u32, ArcSenderPacket>>,
     >,
-    rx_from_packet_processor: Receiver<(u32, Result<Packet, Box<dyn std::error::Error + Send>>)>,
+    rx_from_packet_processor: Receiver<(u32, PacketResult)>,
 }
 
 impl PubackProcessor {
     pub fn new(
         senders_to_c_h_writers: Arc<
             RwLock<
-                HashMap<u32, Arc<Mutex<Sender<Result<Packet, Box<dyn std::error::Error + Send>>>>>>,
+                HashMap<u32, ArcSenderPacket>,
             >,
         >,
         rx_from_packet_processor: Receiver<(
             u32,
-            Result<Packet, Box<dyn std::error::Error + Send>>,
+            PacketResult,
         )>,
     ) -> PubackProcessor {
         PubackProcessor {
@@ -82,7 +81,7 @@ impl PubackProcessor {
 
         for (id, mut packet) in to_send {
             packet.flags.duplicate = true;
-            if let Err(_) = self.send_packet(id, packet) {
+            if self.send_packet(id, packet).is_err() {
                 self.publish_packets.retain(|(_, c_h_id, _)| *c_h_id != id);
                 break;
             };
