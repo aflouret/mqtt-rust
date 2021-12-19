@@ -17,6 +17,7 @@ use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 mod client;
 mod handlers;
 mod response;
+mod client_puback_processor;
 
 fn main() {
     let application = gtk::Application::new(None, Default::default());

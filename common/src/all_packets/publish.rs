@@ -72,7 +72,6 @@ impl WritePacket for Publish {
             stream.write_all(&[*byte])?;
         }
 
-        println!("Publish packet escrito correctamente");
         
         Ok(())
     }
@@ -111,8 +110,6 @@ impl ReadPacket for Publish {
         remaining_bytes.read_exact(&mut app_message_bytes)?;
         let application_message = String::from_utf8(app_message_bytes)?;
 
-        println!("PUBLISH PACKET OK");
-        println!("Publish packet leido correctamente");
 
         Ok(Packet::Publish(Publish::new(
             publish_flags,

@@ -6,7 +6,7 @@ use crate::parser::{decode_remaining_length, encode_remaining_length};
 pub const PUBACK_PACKET_TYPE : u8 = 0x40;
 const PUBACK_REMAINING_LENGTH: u32 = 2;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Puback {
     pub packet_id: u16,
 }

@@ -1,4 +1,6 @@
 use common::all_packets::disconnect::Disconnect;
+use common::all_packets::puback::Puback;
+use common::all_packets::publish::Publish;
 use common::all_packets::unsubscribe::Unsubscribe;
 use common::packet::Qos;
 
@@ -8,7 +10,9 @@ pub enum EventHandlers {
     Subscribe(HandleSubscribe),
     Unsubscribe(HandleUnsubscribe),
     Disconnect(HandleDisconnect),
-    InternPacketId(HandleInternPacketId)
+    InternPuback(HandleInternPuback),
+    InternPublish(HandleInternPublish),
+    InternPacketId(HandleInternPacketId),
 }
 
 #[derive(Debug)]
@@ -119,12 +123,36 @@ impl HandleDisconnect {
 }
 
 #[derive(Debug, Clone)]
+pub struct HandleInternPuback {
+    //pub packet_id: u16,
+    pub puback_packet: Puback,
+}
+
+impl HandleInternPuback {
+    pub fn new(puback_packet: Puback ) -> Self {
+        Self { puback_packet }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct HandleInternPacketId {
     pub packet_id: u16,
 }
 
 impl HandleInternPacketId {
-    pub fn new(packet_id: u16) -> Self {
+    pub fn new(packet_id: u16 ) -> Self {
         Self { packet_id }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct HandleInternPublish {
+    pub publish_packet: Publish,
+}
+
+impl HandleInternPublish {
+    pub fn new(publish_packet: Publish) -> Self {
+        Self { publish_packet }
+    }
+}
+
