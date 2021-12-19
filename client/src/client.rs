@@ -77,26 +77,26 @@ impl Client {
             
             match recv_connection.recv_timeout(Duration::new(keep_alive_sec as u64, 0)) {
                 Ok(EventHandlers::Conection(conec)) => {
-                    self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec,sender_intern.clone() ).unwrap();
+                    self.handle_conection(conec, sender_to_window.clone(), &mut keep_alive_sec,sender_intern.clone() )?;
                 }
 
                 Ok(EventHandlers::Publish(publish)) => {
                     //escuchar el pbuack processor para reenviar publish
-                    self.handle_publish(publish).unwrap();
+                    self.handle_publish(publish)?;
                 }
                 Ok(EventHandlers::Subscribe(subscribe)) => {
-                    self.handle_subscribe(subscribe).unwrap();
+                    self.handle_subscribe(subscribe)?;
                 }
                 Ok(EventHandlers::Unsubscribe(unsubs)) => {
-                    self.handle_unsubscribe(unsubs).unwrap();
+                    self.handle_unsubscribe(unsubs)?;
                 }
                 Ok(EventHandlers::Disconnect(disconnect)) => {
-                    self.handle_disconnect(disconnect).unwrap();
+                    self.handle_disconnect(disconnect)?;
                     return Ok(())
                 }
 
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    self.handle_pingreq().unwrap();
+                    self.handle_pingreq()?;
                 }
 
                 _ => ()
@@ -146,19 +146,12 @@ impl Client {
                             let puback = Puback::new(id);
                             puback.write_to(&mut s).unwrap();
                         }
-                        //let packet_id_pub = publish.packet_id.unwrap();
-                        //subscriptions_msg.push(publish.application_message.to_string() + " - topic:" + &*publish.topic_name.to_string() + " \n");
                         subscriptions_msg.push(
-                            //publish.application_message.to_string() + " - topic:" + &*publish.topic_name.to_string() + " \n"
                             "Topic: ".to_string() + &publish.topic_name.to_string() + &" - ".to_string() + &publish.application_message.to_string() +
                             &" - Qos: ".to_string() + &(publish.flags.qos_level as u8).to_string() + " \n"
                         );
                         let response = ResponseHandlers::PublishResponse(PublishResponse::new(publish, subscriptions_msg.clone(), "Published Succesfull".to_string()));
                         sender.send(response).unwrap();
-                        /*
-                        let puback = Puback::new(packet_id_pub);
-                        puback.write_to(&mut s);
-                        */
                     }
                     Ok(Packet::Pingresp(_pingresp)) => {
                         println!("CLIENT: Pingresp successful received");
@@ -186,7 +179,7 @@ impl Client {
     pub fn handle_pingreq(&mut self) -> Result<(), Box<dyn std::error::Error>>  {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
-            let pingreq_packet = Pingreq::new(); //Usar new una vez mergeado
+            let pingreq_packet = Pingreq::new();
             println!("CLIENT: Send pinreq packet");
             pingreq_packet.write_to(&mut s)?;
         }
@@ -221,7 +214,7 @@ impl Client {
     pub fn handle_subscribe(&mut self, subscribe: HandleSubscribe) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
-            let subscribe_packet = self.create_subscribe_packet(subscribe).unwrap();
+            let subscribe_packet = self.create_subscribe_packet(subscribe)?;
             println!("CLIENT: Send subscribe packet: {:?}", &subscribe_packet);
             subscribe_packet.write_to(&mut s)?;
         }
@@ -296,8 +289,8 @@ impl Client {
 
     pub fn handle_conection(&mut self, mut conec: HandleConection, sender_to_window: Sender<ResponseHandlers>, keep_alive_sec: &mut u16, sender_intern: Sender<EventHandlers>) -> Result<(), Box<dyn std::error::Error>> {
         let address = conec.get_address();
-        let mut socket = TcpStream::connect(address.clone()).unwrap();
-        let keep_alive_time = conec.keep_alive_second.parse().unwrap();
+        let mut socket = TcpStream::connect(address.clone())?;
+        let keep_alive_time = conec.keep_alive_second.parse()?;
         println!("Connecting to: {:?}", address);
         println!("Client id: {:?}", conec.client_id);
         

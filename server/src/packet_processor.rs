@@ -43,7 +43,7 @@ pub struct PacketProcessor {
     logger: Arc<Logger>,
     retained_messages: HashMap<String, Message>,
     packets_id: HashMap<u16, bool>,
-    authenticator: Authenticator, //qos_1_senders: HashMap<u16, Sender<()>>,
+    authenticator: Authenticator,
 }
 
 impl PacketProcessor {
@@ -155,7 +155,6 @@ impl PacketProcessor {
 
             // Mandamos el publish a los suscriptores
             //TODO: solo hacer si es que hay last will
-            //let sess = session.clone();
             let publish_packet = Publish::new(
                 PublishFlags {
                     duplicate: false,
@@ -445,7 +444,6 @@ impl PacketProcessor {
                     .unwrap();
             }
         }
-        //suback_packet.add_return_code(SuccessAtMostOnce);///HARDCODED
         Ok(suback_packet)
     }
 
@@ -458,7 +456,6 @@ impl PacketProcessor {
         //Sacar info del publish
         //Mandamos el puback al client.
 
-        //let current_session = self.sessions.get_mut("a").unwrap(); //TODO: sacar unwrap
         let topic_name = &publish_packet.topic_name;
 
         //Retain Logic Publish
@@ -617,8 +614,6 @@ impl PacketProcessor {
 
     fn send_unacknowledged_messages(&mut self, c_h_id: u32) {
         if let Some(client_id) = self.get_client_id_from_handler_id(c_h_id) {
-            //thread::sleep(Duration::from_millis(100));
-
             let current_session = self.sessions.get_mut(&client_id).unwrap();
             let mut unacknowledged_messages_copy = current_session.unacknowledged_messages.clone();
             unacknowledged_messages_copy.retain(|publish| {

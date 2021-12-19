@@ -124,17 +124,6 @@ fn run_client02() -> JoinHandle<()> {
             assert_eq!(received_suback_packet, expected_suback_packet);
         }
 
-        // let received_publish_packet = Packet::read_from(&mut socket).unwrap();
-        // let expected_publish_packet = Publish::new(
-        //     PublishFlags::new(0b0011_0000),
-        //     "topic_a".to_string(),
-        //     None,
-        //     "hola".to_string(),
-        // );
-
-        // if let Packet::Publish(received_publish_packet) = received_publish_packet {
-        //     assert_eq!(received_publish_packet, expected_publish_packet);
-        // }
         thread::sleep(Duration::from_millis(1000));
         let received_publish_packet = Packet::read_from(&mut socket).unwrap();
         let expected_publish_packet = Publish::new(
@@ -178,14 +167,6 @@ fn run_client03() -> JoinHandle<()> {
             )
         }
 
-        // let publish_packet_0 = Publish::new(
-        //     PublishFlags::new(0b0011_0000),
-        //     "topic_a".to_string(),
-        //     None,
-        //     "hola".to_string(),
-        // );
-
-        // publish_packet_0.write_to(&mut socket).unwrap();
         let publish_packet_1 = Publish::new(
             PublishFlags::new(0b0011_0010),
             "topic_a".to_string(),

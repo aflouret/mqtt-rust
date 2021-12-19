@@ -62,7 +62,6 @@ impl Server {
         >,
         c_h_reader_tx: Sender<(u32, PacketResult)>,
     ) {
-        //let mut id: u32 = 0;
         let mut join_handles = vec![];
 
         for (id, stream) in listener.incoming().flatten().enumerate() {
@@ -77,8 +76,6 @@ impl Server {
             if let Ok(join_handle) = client_handler.run() {
                 join_handles.push(join_handle);
             };
-
-                //id += 1;
             //}
         }
 

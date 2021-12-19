@@ -17,7 +17,7 @@ impl Authenticator {
         let reader = BufReader::new(file);
 
         for line in reader.lines() {
-            let line = line.unwrap();
+            let line = line?;
             let vec: Vec<&str> = line.split(';').collect();
             if vec.len() != 2 {
                 return Err(Error::new(ErrorKind::Other, "Incorrect format"));

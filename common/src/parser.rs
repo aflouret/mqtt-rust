@@ -58,7 +58,6 @@ pub fn encode_mqtt_string(string: &str) -> Result<Vec<u8>, String> {
     Ok(vec)
 }
 
-//Result<String, Box<dyn std::error::Error>>
 pub fn decode_mqtt_string(stream: &mut dyn Read) -> Result<String, std::io::Error> {
     let mut bytes_length = [0u8; 2];
     stream.read_exact(&mut bytes_length)?;

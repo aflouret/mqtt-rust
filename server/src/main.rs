@@ -6,7 +6,7 @@ use std::sync::Arc;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new();
     let logger = Logger::new(config.get_logfilename());
-    let server = Server::new(config, Arc::new(logger.unwrap()))?;
+    let server = Server::new(config, Arc::new(logger?))?;
     server.server_run()?;
 
     Ok(())
