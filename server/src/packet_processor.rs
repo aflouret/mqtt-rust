@@ -181,7 +181,7 @@ impl PacketProcessor {
             Packet::Connect(connect_packet) => {
                 self.logger.log_msg(LogMessage::new(
                     "Connect Packet received from:".to_string(),
-                    client_id,
+                    connect_packet.connect_payload.client_id.clone(),
                 ))?;
                 println!("Recibi el Connect (en process_pracket)");
                 let connack_packet = self.handle_connect_packet(connect_packet, c_h_id)?;
@@ -332,7 +332,7 @@ impl PacketProcessor {
         let connack_packet = Connack::new(session_present, 0);
         self.logger.log_msg(LogMessage::new(
             "Connack packet send it to:".to_string(),
-            client_handler_id.to_string(),
+            client_id.to_string(),
         ))?;
         Ok(connack_packet)
     }
