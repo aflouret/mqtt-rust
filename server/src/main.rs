@@ -1,9 +1,9 @@
 use common::logging::logger::Logger;
 use server::config::Config;
 use server::server::Server;
-use std::sync::Arc;
 use std::env;
 use std::process;
+use std::sync::Arc;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new(env::args()).unwrap_or_else(|err| {

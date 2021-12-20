@@ -1,9 +1,9 @@
-use std::error::Error;
-use std::io::{Read, Write, Cursor};
 use crate::packet::{Packet, ReadPacket, WritePacket};
 use crate::parser::{decode_remaining_length, encode_remaining_length};
+use std::error::Error;
+use std::io::{Cursor, Read, Write};
 
-pub const PUBACK_PACKET_TYPE : u8 = 0x40;
+pub const PUBACK_PACKET_TYPE: u8 = 0x40;
 const PUBACK_REMAINING_LENGTH: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,13 +13,11 @@ pub struct Puback {
 
 impl Puback {
     pub fn new(packet_id: u16) -> Puback {
-        Puback {
-            packet_id,
-        }
+        Puback { packet_id }
     }
 }
 
-impl WritePacket for Puback{
+impl WritePacket for Puback {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn Error>> {
         //FIXED HEADER
         //Escribimos el packet type
@@ -57,13 +55,11 @@ impl ReadPacket for Puback {
 
         println!("Puback packet leido correctamente");
 
-        Ok(Packet::Puback(Puback {
-            packet_id,
-        }))
+        Ok(Packet::Puback(Puback { packet_id }))
     }
 }
 
-fn verify_puback_byte(byte: &u8) -> Result<(), String>{
+fn verify_puback_byte(byte: &u8) -> Result<(), String> {
     match *byte {
         PUBACK_PACKET_TYPE => Ok(()),
         _ => Err("Wrong First Byte".to_string()),

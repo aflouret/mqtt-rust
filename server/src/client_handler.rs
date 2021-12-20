@@ -1,3 +1,4 @@
+use crate::server::{ArcSenderPacket, PacketResult};
 use common::all_packets::connack::Connack;
 use common::all_packets::connect::{
     INCORRECT_PROTOCOL_LEVEL_ERROR_MSG, INCORRECT_PROTOCOL_LEVEL_RETURN_CODE,
@@ -10,7 +11,6 @@ use std::sync::{mpsc, Mutex};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use crate::server::{PacketResult, ArcSenderPacket};
 
 const SOCKET_DISCONNECT_ERROR_MSG: &str = "Disconnectiong Socket due to Error";
 
@@ -26,15 +26,10 @@ impl ClientHandler {
     pub fn new(
         id: u32,
         stream: TcpStream,
-        senders_to_c_h_writers: Arc<
-            RwLock<
-                HashMap<u32, ArcSenderPacket>,
-            >,
-        >,
+        senders_to_c_h_writers: Arc<RwLock<HashMap<u32, ArcSenderPacket>>>,
         sender: Sender<(u32, PacketResult)>,
     ) -> ClientHandler {
-        let (server_tx, c_h_writer_rx) =
-            mpsc::channel::<PacketResult>();
+        let (server_tx, c_h_writer_rx) = mpsc::channel::<PacketResult>();
         let sender_from_c_h_reader_to_c_h_w = server_tx.clone();
         let mut hash = senders_to_c_h_writers.write().unwrap();
         hash.insert(id, Arc::new(Mutex::new(server_tx)));
@@ -90,10 +85,7 @@ struct ClientHandlerWriter {
 }
 
 impl ClientHandlerWriter {
-    pub fn new(
-        socket: TcpStream,
-        receiver: Receiver<PacketResult>,
-    ) -> ClientHandlerWriter {
+    pub fn new(socket: TcpStream, receiver: Receiver<PacketResult>) -> ClientHandlerWriter {
         ClientHandlerWriter { socket, receiver }
     }
 

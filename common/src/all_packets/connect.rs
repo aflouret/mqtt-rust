@@ -1,8 +1,8 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use crate::parser::decode_remaining_length;
 use crate::parser::decode_mqtt_string;
-use crate::parser::encode_remaining_length;
+use crate::parser::decode_remaining_length;
 use crate::parser::encode_mqtt_string;
+use crate::parser::encode_remaining_length;
 
 use std::io::Cursor;
 use std::io::{Read, Write};
@@ -20,19 +20,22 @@ const LAST_WILL_QOS_LSB_FLAG: u8 = 0b0000_1000;
 const LAST_WILL_FLAG: u8 = 0b0000_0100;
 const CLEAN_SESSION_FLAG: u8 = 0b0000_0010;
 const RESERVED_BIT: u8 = 0b0000_0001;
-const ALLOWED_CHARS_CLIENT_ID: &str = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const ALLOWED_CHARS_CLIENT_ID: &str =
+    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const ALLOWED_RANGE_CLIENT_ID: RangeInclusive<usize> = 1..=23;
 
 pub const INCORRECT_PROTOCOL_NAME_ERROR_MSG: &str = "Disconnecting: Incorrect Protocol Name";
-pub const INCORRECT_PROTOCOL_LEVEL_ERROR_MSG: &str = "SendingConnackAndDisconnecting: Incorrect Protocol Level";
+pub const INCORRECT_PROTOCOL_LEVEL_ERROR_MSG: &str =
+    "SendingConnackAndDisconnecting: Incorrect Protocol Level";
 const QOF_2_REQUESTED_ERROR_MSG: &str = "Disconnecting: 4th msb of Connect flags is 1. Should be 0";
-const RESERVED_BIT_SHOULD_BE_ZERO_ERROR_MSG: &str = "Disconnecting: Reserved bit of Connect flags should be 0";
-const INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG: &str = "Disconnecting: Incompatible Connect payload and flags";
+const RESERVED_BIT_SHOULD_BE_ZERO_ERROR_MSG: &str =
+    "Disconnecting: Reserved bit of Connect flags should be 0";
+const INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG: &str =
+    "Disconnecting: Incompatible Connect payload and flags";
 const INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG: &str = "Disconnecting: Incompatible Connect flags";
 const INVALID_CLIENT_ID_ERROR_MSG: &str = "Disconnecting: Invalid Client ID";
 
 pub const INCORRECT_PROTOCOL_LEVEL_RETURN_CODE: u8 = 0x01;
-
 
 #[derive(Debug)]
 pub struct Connect {
@@ -49,7 +52,7 @@ impl Connect {
         keep_alive_seconds: u16,
         clean_session: bool,
         last_will_retain: bool,
-        last_will_qos: bool
+        last_will_qos: bool,
     ) -> Connect {
         Connect {
             connect_payload,
@@ -60,12 +63,12 @@ impl Connect {
         }
     }
 
-    fn get_remaining_length(&self) -> Result<u32, String> {  
+    fn get_remaining_length(&self) -> Result<u32, String> {
         //Variable header bytes + Payload bytes
         Ok(CONNECT_VARIABLE_HEADER_BYTES + self.connect_payload.length()?)
     }
 
-    fn write_flags_to(&self, stream: &mut dyn Write) -> Result <(), Box<dyn std::error::Error>>{
+    fn write_flags_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         let mut result_byte: u8 = 0b0000_0000;
         if self.connect_payload.username.is_some() {
             result_byte |= USERNAME_FLAG;
@@ -122,13 +125,16 @@ impl WritePacket for Connect {
         stream.write_all(&keep_alive_bytes)?;
 
         self.connect_payload.write_to(stream)?;
-        
+
         Ok(())
     }
 }
 
 impl ReadPacket for Connect {
-    fn read_from(stream: &mut dyn Read, _initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(
+        stream: &mut dyn Read,
+        _initial_byte: u8,
+    ) -> Result<Packet, Box<dyn std::error::Error>> {
         let remaining_length = decode_remaining_length(stream)?;
 
         let mut remaining = vec![0u8; remaining_length as usize];
@@ -137,7 +143,7 @@ impl ReadPacket for Connect {
 
         let mut mqtt_string_bytes = [0u8; 6];
         remaining_bytes.read_exact(&mut mqtt_string_bytes)?;
-        verify_protocol_name_bytes(&mqtt_string_bytes)?; 
+        verify_protocol_name_bytes(&mqtt_string_bytes)?;
 
         let mut protocol_level_byte = [0u8; 1];
         remaining_bytes.read_exact(&mut protocol_level_byte)?;
@@ -161,7 +167,7 @@ impl ReadPacket for Connect {
             keep_alive_seconds,
             connect_flags.clean_session,
             connect_flags.last_will_retain,
-            connect_flags.last_will_qos
+            connect_flags.last_will_qos,
         )))
     }
 }
@@ -169,7 +175,7 @@ impl ReadPacket for Connect {
 fn verify_protocol_name_bytes(bytes: &[u8; 6]) -> Result<(), String> {
     let mqtt_string_bytes = encode_mqtt_string(PROTOCOL_NAME)?;
     if mqtt_string_bytes != *bytes {
-        // [MQTT-3.1.2-1]. 
+        // [MQTT-3.1.2-1].
         return Err(INCORRECT_PROTOCOL_NAME_ERROR_MSG.into());
     }
 
@@ -177,7 +183,7 @@ fn verify_protocol_name_bytes(bytes: &[u8; 6]) -> Result<(), String> {
 }
 
 fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
-    //TODO: The Server MUST respond to the 401 CONNECT Packet with a CONNACK return code 0x01 
+    //TODO: The Server MUST respond to the 401 CONNECT Packet with a CONNACK return code 0x01
     // (unacceptable protocol level) and then disconnect 402 the Client if the Protocol Level is not supported by the Server
     if byte[0] != CONNECT_PROTOCOL_LEVEL {
         return Err(INCORRECT_PROTOCOL_LEVEL_ERROR_MSG.into());
@@ -187,7 +193,7 @@ fn verify_protocol_level_byte(byte: &[u8; 1]) -> Result<(), String> {
 
 fn verify_connect_flags(flags: &ConnectFlags) -> Result<(), String> {
     //If the Will Flag is set to 0 the Will QoS and Will Retain fields in the Connect Flags MUST be set to zero
-    if !flags.last_will_flag && (flags.last_will_qos || flags.last_will_retain){
+    if !flags.last_will_flag && (flags.last_will_qos || flags.last_will_retain) {
         return Err(INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG.into());
     }
 
@@ -209,15 +215,18 @@ fn verify_payload(flags: &ConnectFlags, payload: &ConnectPayload) -> Result<(), 
         || (payload.last_will_topic.is_some() && !flags.last_will_flag)
         || (payload.last_will_topic.is_none() && flags.last_will_flag)
     {
-        return Err(INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG.into());  
+        return Err(INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG.into());
     }
 
     Ok(())
 }
 
-fn verify_client_id(client_id: &str) -> Result<(), Box<dyn std::error::Error>>{
-    if ! client_id.chars().all(|c| ALLOWED_CHARS_CLIENT_ID.contains(c))
-    || ! ALLOWED_RANGE_CLIENT_ID.contains(&client_id.chars().count()) {
+fn verify_client_id(client_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if !client_id
+        .chars()
+        .all(|c| ALLOWED_CHARS_CLIENT_ID.contains(c))
+        || !ALLOWED_RANGE_CLIENT_ID.contains(&client_id.chars().count())
+    {
         println!("El client id ingresado es inválido");
         return Err(INVALID_CLIENT_ID_ERROR_MSG.into());
     }
@@ -271,7 +280,7 @@ impl ConnectFlags {
         }
         if flags_byte & LAST_WILL_QOS_MSB_FLAG == LAST_WILL_QOS_MSB_FLAG {
             return Err(QOF_2_REQUESTED_ERROR_MSG.into());
-        }   
+        }
         if flags_byte & LAST_WILL_QOS_LSB_FLAG == LAST_WILL_QOS_LSB_FLAG {
             flags[4] = true; // Last will qos flag
         }
@@ -283,7 +292,7 @@ impl ConnectFlags {
         }
         if flags_byte & RESERVED_BIT == RESERVED_BIT {
             return Err(RESERVED_BIT_SHOULD_BE_ZERO_ERROR_MSG.into()); // [MQTT-3.1.2-3].
-        }   
+        }
 
         Ok(ConnectFlags::new(
             flags[0], flags[1], flags[2], flags[4], flags[5], flags[6],
@@ -437,7 +446,7 @@ mod tests {
         let to_test = verify_connect_flags(&flags);
         assert_eq!(to_test, Err(INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG.into()));
     }
-    
+
     #[test]
     fn error_last_will_flags() {
         let flags = ConnectFlags::new(true, true, true, true, false, true);
@@ -472,9 +481,12 @@ mod tests {
         );
 
         let to_test = verify_payload(&flags, &payload);
-        assert_eq!(to_test, Err(INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG.into()));
+        assert_eq!(
+            to_test,
+            Err(INCOMPATIBLE_PAYLOAD_AND_CONNECT_FLAGS_ERROR_MSG.into())
+        );
     }
-    
+
     #[test]
     fn correct_packet() {
         let connect_packet = Connect::new(
@@ -497,7 +509,7 @@ mod tests {
         let to_test = Connect::read_from(&mut buff, 0x10).unwrap();
         if let Packet::Connect(to_test) = to_test {
             assert!(
-                    to_test.connect_payload == connect_packet.connect_payload
+                to_test.connect_payload == connect_packet.connect_payload
                     && to_test.keep_alive_seconds == 60
                     && to_test.clean_session == true
                     && to_test.last_will_retain == true
@@ -526,7 +538,10 @@ mod tests {
         connect_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Connect::read_from(&mut buff, 0x10);
-        assert_eq!(to_test.unwrap_err().to_string(), INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG);
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            INCOMPATIBLE_CONNECT_FLAGS_ERROR_MSG
+        );
     }
 
     #[test]
@@ -549,7 +564,10 @@ mod tests {
         connect_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Connect::read_from(&mut buff, 0x10);
-        assert_eq!(to_test.unwrap_err().to_string(), INVALID_CLIENT_ID_ERROR_MSG);
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            INVALID_CLIENT_ID_ERROR_MSG
+        );
     }
 
     #[test]
@@ -572,7 +590,10 @@ mod tests {
         connect_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Connect::read_from(&mut buff, 0x10);
-        assert_eq!(to_test.unwrap_err().to_string(), INVALID_CLIENT_ID_ERROR_MSG);
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            INVALID_CLIENT_ID_ERROR_MSG
+        );
     }
 
     #[test]
@@ -595,7 +616,10 @@ mod tests {
         connect_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Connect::read_from(&mut buff, 0x10);
-        assert_eq!(to_test.unwrap_err().to_string(), INVALID_CLIENT_ID_ERROR_MSG);
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            INVALID_CLIENT_ID_ERROR_MSG
+        );
     }
 
     #[test]
@@ -619,11 +643,9 @@ mod tests {
         buff.set_position(1);
         let to_test = Connect::read_from(&mut buff, 0x10).unwrap();
         if let Packet::Connect(to_test) = to_test {
-            assert_eq!(to_test.connect_payload.client_id, "Pedro");    
+            assert_eq!(to_test.connect_payload.client_id, "Pedro");
         } else {
             assert!(false);
         }
-        
     }
-    
 }

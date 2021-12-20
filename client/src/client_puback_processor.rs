@@ -4,9 +4,9 @@ use common::packet::Packet;
 
 use std::sync::mpsc::{Receiver, Sender};
 
-use std::time::{Duration, SystemTime};
 use crate::client::PacketResult;
 use crate::handlers::{EventHandlers, HandleInternPublish};
+use std::time::{Duration, SystemTime};
 
 pub struct PubackProcessor {
     publish_packets: Vec<(SystemTime, Publish)>,
@@ -54,7 +54,7 @@ impl PubackProcessor {
     }
 
     fn process_puback(&mut self, puback_packet: Puback) {
-        let mut index_to_delete= 0;
+        let mut index_to_delete = 0;
         for (index, packet) in self.publish_packets.iter_mut().enumerate() {
             if packet.1.packet_id.unwrap() == puback_packet.packet_id {
                 index_to_delete = index;
@@ -81,11 +81,12 @@ impl PubackProcessor {
         }
     }
 
-    fn send_packet(
-        &mut self,
-        publish_packet: Publish,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.sender_to_event_handler_client.send(EventHandlers::InternPublish(HandleInternPublish::new(publish_packet))).unwrap();
+    fn send_packet(&mut self, publish_packet: Publish) -> Result<(), Box<dyn std::error::Error>> {
+        self.sender_to_event_handler_client
+            .send(EventHandlers::InternPublish(HandleInternPublish::new(
+                publish_packet,
+            )))
+            .unwrap();
         Ok(())
     }
 }

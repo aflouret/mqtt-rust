@@ -1,31 +1,22 @@
+use crate::server::{ArcSenderPacket, PacketResult};
 use common::all_packets::puback::Puback;
 use common::all_packets::publish::Publish;
 use common::packet::Packet;
 use std::collections::HashMap;
-use std::sync::mpsc::{Receiver};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
-use crate::server::{PacketResult, ArcSenderPacket};
 
 pub struct PubackProcessor {
     publish_packets: Vec<(SystemTime, u32, Publish)>,
-    senders_to_c_h_writers: Arc<
-        RwLock<HashMap<u32, ArcSenderPacket>>,
-    >,
+    senders_to_c_h_writers: Arc<RwLock<HashMap<u32, ArcSenderPacket>>>,
     rx_from_packet_processor: Receiver<(u32, PacketResult)>,
 }
 
 impl PubackProcessor {
     pub fn new(
-        senders_to_c_h_writers: Arc<
-            RwLock<
-                HashMap<u32, ArcSenderPacket>,
-            >,
-        >,
-        rx_from_packet_processor: Receiver<(
-            u32,
-            PacketResult,
-        )>,
+        senders_to_c_h_writers: Arc<RwLock<HashMap<u32, ArcSenderPacket>>>,
+        rx_from_packet_processor: Receiver<(u32, PacketResult)>,
     ) -> PubackProcessor {
         PubackProcessor {
             senders_to_c_h_writers,

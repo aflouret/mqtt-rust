@@ -1,10 +1,9 @@
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::prelude::*;
-use std::sync::{mpsc, Mutex};
 use std::sync::mpsc::Sender;
+use std::sync::{mpsc, Mutex};
 use std::thread;
-
 
 pub struct Logger {
     logger_send: Mutex<Sender<LogMessage>>,
@@ -60,7 +59,6 @@ impl LogMessage {
     }
 }
 
-
 #[cfg(test)]
 pub mod test_logger {
     use crate::logging::logger::LogMessage;
@@ -69,7 +67,8 @@ pub mod test_logger {
     fn test_log_message_01_() {
         let message = LogMessage::new(
             "Servidor inicializado correctamente en:".to_string(),
-            "8080".to_string());
+            "8080".to_string(),
+        );
         let msg_from_log_message = "Servidor inicializado correctamente en: 8080\n".to_string();
         assert_eq!(message.msg_to_string(), msg_from_log_message);
     }

@@ -1,12 +1,15 @@
-use common::all_packets::connack::{CONNACK_CONNECTION_ACCEPTED};
-use common::all_packets::connect::{Connect, ConnectPayload};
-use common::all_packets::pingreq::Pingreq;
-use common::all_packets::publish::{Publish, PublishFlags};
-use std::time::Duration;
-use crate::handlers::{EventHandlers, HandleDisconnect, HandleInternPacketId, HandleInternPuback, HandlePublish, HandleSubscribe, HandleUnsubscribe};
+use crate::client_puback_processor::PubackProcessor;
+use crate::handlers::{
+    EventHandlers, HandleDisconnect, HandleInternPacketId, HandleInternPuback, HandlePublish,
+    HandleSubscribe, HandleUnsubscribe,
+};
 use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 use crate::HandleConection;
+use common::all_packets::connack::CONNACK_CONNECTION_ACCEPTED;
+use common::all_packets::connect::{Connect, ConnectPayload};
+use common::all_packets::pingreq::Pingreq;
 use common::all_packets::puback::Puback;
+use common::all_packets::publish::{Publish, PublishFlags};
 use common::all_packets::subscribe::Subscribe;
 use common::packet::WritePacket;
 use common::packet::SOCKET_CLOSED_ERROR_MSG;
@@ -14,9 +17,9 @@ use common::packet::{Packet, Qos, Subscription};
 use std::collections::HashMap;
 use std::net::{Shutdown, TcpStream};
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 use std::{io, thread};
-use crate::client_puback_processor::PubackProcessor;
 
 const MAX_KEEP_ALIVE: u16 = 65000;
 const MAX_WAIT_TIME_FOR_CONNACK_IF_NO_KEEP_ALIVE: u64 = 10;
@@ -30,8 +33,7 @@ pub struct Client {
     server_stream: Option<TcpStream>,
     packets_id: HashMap<u16, bool>,
     tx_to_puback_processor: Sender<PacketResult>,
-    rx_from_packet_processor:
-    Option<Receiver<PacketResult>>,
+    rx_from_packet_processor: Option<Receiver<PacketResult>>,
 }
 
 impl Client {
@@ -64,8 +66,7 @@ impl Client {
         let rx_from_client = self.rx_from_packet_processor.take().unwrap();
         let sender_intern_puback = sender_intern.clone();
         thread::spawn(move || {
-            let puback_processor =
-                PubackProcessor::new(rx_from_client, sender_intern_puback);
+            let puback_processor = PubackProcessor::new(rx_from_client, sender_intern_puback);
             puback_processor.run();
         });
         loop {
@@ -95,7 +96,8 @@ impl Client {
                             sender_to_window.clone(),
                             &mut keep_alive_sec,
                             sender_intern.clone(),
-                        ).unwrap();
+                        )
+                        .unwrap();
                         println!("CLIENT: CONNECTED");
                         break;
                     }
@@ -131,20 +133,22 @@ impl Client {
                 Ok(EventHandlers::Disconnect(disconnect)) => {
                     self.handle_disconnect(disconnect)?;
                     return Ok(());
-                },
+                }
                 Ok(EventHandlers::InternPuback(intern)) => {
                     let packet_id = intern.puback_packet.packet_id;
                     self.packets_id.insert(packet_id, false); //packet id puesto en false, que no se está usando
-                    self.tx_to_puback_processor.send(Ok(Packet::Puback(Puback::new(packet_id)))).unwrap();
-                },
+                    self.tx_to_puback_processor
+                        .send(Ok(Packet::Puback(Puback::new(packet_id))))
+                        .unwrap();
+                }
                 Ok(EventHandlers::InternPublish(publish)) => {
-                    self.handle_publish_from_puback_processor(publish.publish_packet).unwrap();
-                },
+                    self.handle_publish_from_puback_processor(publish.publish_packet)
+                        .unwrap();
+                }
                 Ok(EventHandlers::InternPacketId(intern)) => {
                     let packet_id = intern.packet_id;
                     self.packets_id.insert(packet_id, false); //packet id puesto en false, que no se está usando
-                },
-
+                }
 
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     self.handle_pingreq()?;
@@ -176,27 +180,27 @@ impl Client {
                             .unwrap();
                     }
                     Ok(Packet::Puback(puback)) => {
-                        let intern = EventHandlers::InternPuback(HandleInternPuback::new(
-                            puback
-                        ));
+                        let intern = EventHandlers::InternPuback(HandleInternPuback::new(puback));
                         sender_intern.send(intern).unwrap();
                         println!("CLIENT: PUBACK packet successful received");
                         let puback_response = ResponseHandlers::PubackResponse(
-                            PubackResponse::new("Published correctly".to_string())
+                            PubackResponse::new("Published correctly".to_string()),
                         );
                         sender.send(puback_response).unwrap();
-                       // thread::sleep(Duration::new(2, 0));
-/*                        sender.
-                            send(ResponseHandlers::PubackResponse(
-                                PubackResponse::new("".to_string())))
-                            .unwrap();*/
+                        // thread::sleep(Duration::new(2, 0));
+                        /*                        sender.
+                        send(ResponseHandlers::PubackResponse(
+                            PubackResponse::new("".to_string())))
+                        .unwrap();*/
                         println!("CLIENT: Packet id enviado internamente para liberar");
 
                         //mandar via channel el puback al puback processor,
                     }
                     Ok(Packet::Suback(suback)) => {
                         println!("CLIENT: SUBACK packet successful received");
-                        let intern = EventHandlers::InternPacketId(HandleInternPacketId::new(suback.packet_id));
+                        let intern = EventHandlers::InternPacketId(HandleInternPacketId::new(
+                            suback.packet_id,
+                        ));
                         sender_intern.send(intern).unwrap();
                         //liberar el packet id que nos mandan
                     }
@@ -204,7 +208,10 @@ impl Client {
                         println!("CLIENT: UNSUBACK packet successful received");
                     }
                     Ok(Packet::Publish(publish)) => {
-                        println!("CLIENT: Recibi publish: msg: {:?}, qos: {}", &publish.application_message, publish.flags.qos_level as u8);
+                        println!(
+                            "CLIENT: Recibi publish: msg: {:?}, qos: {}",
+                            &publish.application_message, publish.flags.qos_level as u8
+                        );
                         if let Some(id) = publish.packet_id {
                             let puback = Puback::new(id);
                             puback.write_to(&mut s).unwrap();
@@ -249,7 +256,6 @@ impl Client {
         });
     }
 
-
     pub fn handle_pingreq(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
@@ -261,7 +267,10 @@ impl Client {
         Ok(())
     }
 
-    pub fn handle_publish_from_puback_processor(&mut self, publish: Publish) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn handle_publish_from_puback_processor(
+        &mut self,
+        publish: Publish,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
             publish.write_to(&mut s)?;
@@ -272,8 +281,8 @@ impl Client {
 
     pub fn handle_disconnect(
         &mut self,
-        disconnect: HandleDisconnect)
-        -> Result<(), Box<dyn std::error::Error>> {
+        disconnect: HandleDisconnect,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
             let disconnect_packet = disconnect.disconnect_packet;
@@ -288,8 +297,8 @@ impl Client {
 
     pub fn handle_unsubscribe(
         &mut self,
-        unsubs: HandleUnsubscribe)
-        -> Result<(), Box<dyn std::error::Error>> {
+        unsubs: HandleUnsubscribe,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
             let unsubscribe_packet = unsubs.unsubscribe_packet;
@@ -302,8 +311,8 @@ impl Client {
 
     pub fn handle_subscribe(
         &mut self,
-        subscribe: HandleSubscribe)
-        -> Result<(), Box<dyn std::error::Error>> {
+        subscribe: HandleSubscribe,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
             let subscribe_packet = self.create_subscribe_packet(subscribe)?;
@@ -314,23 +323,29 @@ impl Client {
         Ok(())
     }
 
-    pub fn create_subscribe_packet(
-        &mut self,
-        subscribe: HandleSubscribe)
-        -> io::Result<Subscribe> {
+    pub fn create_subscribe_packet(&mut self, subscribe: HandleSubscribe) -> io::Result<Subscribe> {
         let packet_id = self.get_packet_id();
         let mut subscribe_packet = Subscribe::new(packet_id);
-        subscribe_packet.add_subscription(Subscription { topic_filter: subscribe.topic, max_qos: subscribe.qos });
+        subscribe_packet.add_subscription(Subscription {
+            topic_filter: subscribe.topic,
+            max_qos: subscribe.qos,
+        });
 
         Ok(subscribe_packet)
     }
 
-    pub fn handle_publish(&mut self, publish: HandlePublish) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn handle_publish(
+        &mut self,
+        publish: HandlePublish,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(socket) = &mut self.server_stream {
             let mut s = socket.try_clone()?;
             let publish_packet = self.create_publish_packet(publish)?;
-            if publish_packet.flags.qos_level == Qos::AtLeastOnce && !publish_packet.flags.duplicate {
-                self.tx_to_puback_processor.send(Ok(Packet::Publish(publish_packet.clone()))).unwrap();
+            if publish_packet.flags.qos_level == Qos::AtLeastOnce && !publish_packet.flags.duplicate
+            {
+                self.tx_to_puback_processor
+                    .send(Ok(Packet::Publish(publish_packet.clone())))
+                    .unwrap();
             }
             println!("CLIENT: Send publish packet: {:?}", &publish_packet);
             publish_packet.write_to(&mut s)?;
@@ -354,10 +369,7 @@ impl Client {
         packet_id
     }
 
-    pub fn create_publish_packet(
-        &mut self,
-        publish: HandlePublish,
-    ) -> io::Result<Publish> {
+    pub fn create_publish_packet(&mut self, publish: HandlePublish) -> io::Result<Publish> {
         let mut packet_id: u16 = 0;
         if publish.qos1_level {
             packet_id = self.get_packet_id();
@@ -407,7 +419,8 @@ impl Client {
                 conec.client_id,
                 conec.last_will.last_will_topic,
                 conec.last_will.last_will_msg,
-                conec.username, conec.password,
+                conec.username,
+                conec.password,
             ),
             keep_alive_time,
             conec.clean_session,

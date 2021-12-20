@@ -1,23 +1,25 @@
-use std::{thread};
-use std::sync::{mpsc};
-use std::sync::mpsc::{Receiver, Sender};
 use crate::client::Client;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
 
 extern crate glib;
 extern crate gtk;
 
+use crate::handlers::{
+    EventHandlers, HandleConection, HandleDisconnect, HandlePublish, HandleSubscribe,
+    HandleUnsubscribe, LastWillInfo,
+};
+use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 use common::all_packets::disconnect::Disconnect;
+use common::all_packets::unsubscribe::Unsubscribe;
 use glib::clone;
 use gtk::prelude::*;
-use common::all_packets::unsubscribe::{Unsubscribe};
-use crate::handlers::{EventHandlers, HandleConection, HandlePublish,
-     HandleSubscribe, HandleUnsubscribe, HandleDisconnect, LastWillInfo};
-use crate::response::{PubackResponse, PublishResponse, ResponseHandlers};
 
 mod client;
+mod client_puback_processor;
 mod handlers;
 mod response;
-mod client_puback_processor;
 
 fn main() {
     let application = gtk::Application::new(None, Default::default());
@@ -27,8 +29,10 @@ fn main() {
         let (client_sender, window_recv) = mpsc::channel::<ResponseHandlers>();
         setup(builder, sender_connection.clone(), window_recv);
         thread::spawn(move || {
-            let client = Client::new(); 
-            client.start_client(recv_connection, client_sender, sender_connection).unwrap();
+            let client = Client::new();
+            client
+                .start_client(recv_connection, client_sender, sender_connection)
+                .unwrap();
         });
     });
 
@@ -47,22 +51,35 @@ fn build_ui(app: &gtk::Application) -> gtk::Builder {
     builder
 }
 
-fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv: Receiver<ResponseHandlers>) {
+fn setup(
+    builder: gtk::Builder,
+    sender_conec: Sender<EventHandlers>,
+    window_recv: Receiver<ResponseHandlers>,
+) {
     handle_connect_tab(builder.clone(), sender_conec.clone());
     handle_publish_tab(builder.clone(), sender_conec.clone());
     handle_subscribe_tab(builder.clone(), sender_conec.clone());
     handle_unsubscribe(builder.clone(), sender_conec);
-    let (intern_sender, intern_recv) = glib::MainContext::channel::<ResponseHandlers>(glib::PRIORITY_DEFAULT);
-    thread::spawn(move || {
-        loop {
-            if let Ok(response) = window_recv.recv() {
-                match response {
-                    ResponseHandlers::PublishResponse(publish) => {
-                        intern_sender.send(ResponseHandlers::PublishResponse(PublishResponse::new(publish.publish_packet,publish.msgs.clone(),publish.msg_correct))).unwrap();
-                    },
-                    ResponseHandlers::PubackResponse(puback) => {
-                        intern_sender.send(ResponseHandlers::PubackResponse(PubackResponse::new(puback.msg))).unwrap();
-                    }
+    let (intern_sender, intern_recv) =
+        glib::MainContext::channel::<ResponseHandlers>(glib::PRIORITY_DEFAULT);
+    thread::spawn(move || loop {
+        if let Ok(response) = window_recv.recv() {
+            match response {
+                ResponseHandlers::PublishResponse(publish) => {
+                    intern_sender
+                        .send(ResponseHandlers::PublishResponse(PublishResponse::new(
+                            publish.publish_packet,
+                            publish.msgs.clone(),
+                            publish.msg_correct,
+                        )))
+                        .unwrap();
+                }
+                ResponseHandlers::PubackResponse(puback) => {
+                    intern_sender
+                        .send(ResponseHandlers::PubackResponse(PubackResponse::new(
+                            puback.msg,
+                        )))
+                        .unwrap();
                 }
             }
         }
@@ -78,7 +95,7 @@ fn setup(builder: gtk::Builder, sender_conec: Sender<EventHandlers>, window_recv
                     joined_string += msg;
                 }
                 buffer.set_text(&joined_string);
-            },
+            }
             ResponseHandlers::PubackResponse(puback) => {
                 let puback_msg = puback.msg;
                 response_publish.set_text(&*puback_msg);
@@ -108,41 +125,41 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
 
     let sender_for_disconnect = sender.clone();
     connect_button.connect_clicked(clone!(@weak username_entry  => move |_| {
-        let address = (&ip_entry.text()).to_string() + ":" + &*(&port_entry.text()).to_string();
-        let a  = clean_session.is_active();
-        let b = last_will_retain.is_active();
-        let c = last_will_qos.is_active();
+    let address = (&ip_entry.text()).to_string() + ":" + &*(&port_entry.text()).to_string();
+    let a  = clean_session.is_active();
+    let b = last_will_retain.is_active();
+    let c = last_will_qos.is_active();
 
-        let mut username: Option<String> = None;
-        if &username_entry.text() != "" {
-            username = Some((&username_entry.text()).to_string());
-        }
+    let mut username: Option<String> = None;
+    if &username_entry.text() != "" {
+        username = Some((&username_entry.text()).to_string());
+    }
 
-        let mut password: Option<String> = None;
-        if &password_entry.text() != "" {
-            password = Some((&password_entry.text()).to_string());
-        }
+    let mut password: Option<String> = None;
+    if &password_entry.text() != "" {
+        password = Some((&password_entry.text()).to_string());
+    }
 
-        let mut last_will_msg: Option<String> = None;
-        if &last_will_msg_entry.text() != "" {
-            last_will_msg = Some((&last_will_msg_entry.text()).to_string());
-        }
+    let mut last_will_msg: Option<String> = None;
+    if &last_will_msg_entry.text() != "" {
+        last_will_msg = Some((&last_will_msg_entry.text()).to_string());
+    }
 
-        let mut last_will_topic: Option<String> = None;
-        if &last_will_topic_entry.text() != "" {
-            last_will_topic = Some((&last_will_topic_entry.text()).to_string());
-        }
+    let mut last_will_topic: Option<String> = None;
+    if &last_will_topic_entry.text() != "" {
+        last_will_topic = Some((&last_will_topic_entry.text()).to_string());
+    }
 
-        let event_conection = EventHandlers::Conection(HandleConection::
-            new(address,(&client_id_entry.text()).to_string(),
-                a,
-                (&keep_alive_entry.text()).to_string(),
-                username,
-                password,
-                LastWillInfo::new(last_will_topic, last_will_msg, c, b)
-        ));
-        sender.send(event_conection).unwrap();
-        }));
+    let event_conection = EventHandlers::Conection(HandleConection::
+        new(address,(&client_id_entry.text()).to_string(),
+            a,
+            (&keep_alive_entry.text()).to_string(),
+            username,
+            password,
+            LastWillInfo::new(last_will_topic, last_will_msg, c, b)
+    ));
+    sender.send(event_conection).unwrap();
+    }));
 
     let disconnect_button: gtk::Button = builder.object("disconnect_button").unwrap();
     disconnect_button.connect_clicked(clone! (@weak disconnect_button => move |_| {

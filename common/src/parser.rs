@@ -44,11 +44,11 @@ pub fn encode_remaining_length(packet_length: u32) -> Vec<u8> {
 pub fn encode_mqtt_string(string: &str) -> Result<Vec<u8>, String> {
     let string_bytes = string.as_bytes();
     let len_string_bytes = string_bytes.len();
-    
+
     if len_string_bytes > MAX_MQTT_STRING_BYTES {
         return Err("Incorrect length".into());
     }
-    
+
     let length = (len_string_bytes as u16).to_be_bytes();
     let mut vec: Vec<u8> = vec![length[0], length[1]];
     for byte in string_bytes {

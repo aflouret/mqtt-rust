@@ -39,7 +39,7 @@ impl Subscription {
         if qos_level_bytes[0] & 0xFA != 0 {
             return Err(Box::new(Error::new(
                 Other,
-                "The upper 6 bits of the Requested QoS byte should be 0"
+                "The upper 6 bits of the Requested QoS byte should be 0",
             )));
         }
 
@@ -52,14 +52,15 @@ impl Subscription {
 
         Ok(Subscription {
             topic_filter,
-            max_qos })
+            max_qos,
+        })
     }
 }
 
 pub trait ReadPacket {
     fn read_from(
         stream: &mut dyn Read,
-        initial_byte: u8
+        initial_byte: u8,
     ) -> Result<Packet, Box<dyn std::error::Error>>;
 }
 

@@ -100,7 +100,7 @@ impl Session {
         self.unacknowledged_messages.push(publish_packet);
     }
 
-    pub fn update_last_will(&mut self, connect_packet: &Connect){
+    pub fn update_last_will(&mut self, connect_packet: &Connect) {
         self.last_will_msg = connect_packet.connect_payload.last_will_message.clone();
         self.last_will_topic = connect_packet.connect_payload.last_will_topic.clone();
         self.last_will_retain = connect_packet.last_will_retain;

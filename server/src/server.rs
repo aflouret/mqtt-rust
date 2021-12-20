@@ -32,12 +32,8 @@ impl Server {
             format!("Servidor escuchando en: {}", &address),
             "".to_string(),
         ))?;
-        let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<
-            u32,
-            ArcSenderPacket,
-        >::new()));
-        let (c_h_reader_tx, packet_proc_rx) =
-            mpsc::channel::<(u32, PacketResult)>();
+        let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<u32, ArcSenderPacket>::new()));
+        let (c_h_reader_tx, packet_proc_rx) = mpsc::channel::<(u32, PacketResult)>();
 
         let packet_processor = PacketProcessor::new(
             packet_proc_rx,
@@ -55,11 +51,7 @@ impl Server {
     fn handle_connections(
         &self,
         listener: TcpListener,
-        senders_to_c_h_writers: Arc<
-            RwLock<
-                HashMap<u32, ArcSenderPacket>,
-            >,
-        >,
+        senders_to_c_h_writers: Arc<RwLock<HashMap<u32, ArcSenderPacket>>>,
         c_h_reader_tx: Sender<(u32, PacketResult)>,
     ) {
         let mut join_handles = vec![];

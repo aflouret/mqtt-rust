@@ -1,5 +1,6 @@
 use crate::authenticator::Authenticator;
 use crate::puback_processor::PubackProcessor;
+use crate::server::{ArcSenderPacket, PacketResult};
 use crate::session::Session;
 use crate::topic_filters;
 use common::all_packets::connack::{
@@ -18,11 +19,10 @@ use common::logging::logger::{LogMessage, Logger};
 use common::packet::{Packet, Qos};
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
+use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SendError, Sender};
-use std::sync::{mpsc};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use crate::server::{PacketResult, ArcSenderPacket};
 
 const PACKETS_ID: u16 = 100;
 
@@ -35,11 +35,8 @@ pub struct PacketProcessor {
     sessions: HashMap<String, Session>,
     rx: Receiver<(u32, PacketResult)>,
     tx_to_puback_processor: Sender<(u32, PacketResult)>,
-    rx_from_packet_processor:
-        Option<Receiver<(u32, PacketResult)>>,
-    senders_to_c_h_writers: Arc<
-        RwLock<HashMap<u32, ArcSenderPacket>>,
-    >,
+    rx_from_packet_processor: Option<Receiver<(u32, PacketResult)>>,
+    senders_to_c_h_writers: Arc<RwLock<HashMap<u32, ArcSenderPacket>>>,
     logger: Arc<Logger>,
     retained_messages: HashMap<String, Message>,
     packets_id: HashMap<u16, bool>,
@@ -81,7 +78,6 @@ impl PacketProcessor {
                 puback_processor.run();
             });
 
-            
             while let Ok((c_h_id, packet)) = self.rx.recv() {
                 match packet {
                     Ok(packet) => {
@@ -127,10 +123,13 @@ impl PacketProcessor {
 
     pub fn handle_disconnect_error(&mut self, c_h_id: u32) {
         // Obtenemos la session del c_h_id. Si no existe, es porque ya se desconectó el client con Disconnect
-        let session = match self.sessions.iter()
-            .find(|(_id, session)| session.get_client_handler_id() == Some(c_h_id)) {
+        let session = match self
+            .sessions
+            .iter()
+            .find(|(_id, session)| session.get_client_handler_id() == Some(c_h_id))
+        {
             Some((_client_id, session)) => session,
-            None =>  return
+            None => return,
         };
 
         println!("Session: {:?}", session);
@@ -141,7 +140,9 @@ impl PacketProcessor {
             let mut p = None;
             if let Some(level) = session.last_will_qos {
                 if level == Qos::AtLeastOnce {
-                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                    if let Some(packet_id) =
+                        PacketProcessor::find_key_for_value(self.packets_id.clone(), false)
+                    {
                         p = Some(packet_id);
                         self.packets_id.insert(packet_id, true);
                     }
@@ -154,10 +155,12 @@ impl PacketProcessor {
                 PublishFlags {
                     duplicate: false,
                     qos_level: session.last_will_qos.unwrap(),
-                    retain: session.last_will_retain },
+                    retain: session.last_will_retain,
+                },
                 session.last_will_topic.as_ref().unwrap().clone(),
                 p,
-                session.last_will_msg.as_ref().unwrap().clone());
+                session.last_will_msg.as_ref().unwrap().clone(),
+            );
 
             print!("Voy a mandar el publish last will {:?}", publish_packet);
 
@@ -387,7 +390,7 @@ impl PacketProcessor {
 
         let mut suback_packet = Suback::new(subscribe_packet.packet_id);
         for subscription in subscribe_packet.subscriptions {
-            if !topic_filters::topic_filter_is_valid(&subscription.topic_filter){
+            if !topic_filters::topic_filter_is_valid(&subscription.topic_filter) {
                 let return_code = SubackReturnCode::Failure;
                 suback_packet.add_return_code(return_code);
             } else {
@@ -483,7 +486,10 @@ impl PacketProcessor {
         publish_send.flags.retain = false;
 
         for session in self.sessions.values() {
-            if session.is_subscribed_to(&publish_packet.topic_name).is_some() {
+            if session
+                .is_subscribed_to(&publish_packet.topic_name)
+                .is_some()
+            {
                 if let Some(client_handler_id) = session.get_client_handler_id() {
                     self.send_packet_to_client_handler(
                         client_handler_id,

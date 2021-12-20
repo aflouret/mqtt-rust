@@ -68,7 +68,10 @@ impl WritePacket for Unsubscribe {
 }
 
 impl ReadPacket for Unsubscribe {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(
+        stream: &mut dyn Read,
+        initial_byte: u8,
+    ) -> Result<Packet, Box<dyn std::error::Error>> {
         verify_unsubscribe_byte(&initial_byte)?;
         let remaining_length = decode_remaining_length(stream)?;
 
@@ -83,18 +86,19 @@ impl ReadPacket for Unsubscribe {
         let mut packet_unsubscribe = Unsubscribe::new(packet_identifier);
         loop {
             match decode_mqtt_string(&mut remaining_bytes) {
-                Err(e) => {
-                    match e.kind() {
-                        UnexpectedEof => break,
-                        _ => return Err(Box::new(e)),
-                    }
-                }
+                Err(e) => match e.kind() {
+                    UnexpectedEof => break,
+                    _ => return Err(Box::new(e)),
+                },
                 Ok(topic) => packet_unsubscribe.add_topic(topic),
             }
         }
 
         if packet_unsubscribe.topics.is_empty() {
-            Err(Box::new(Error::new(Other, "Unsubscribe can't have an empty topic list")))
+            Err(Box::new(Error::new(
+                Other,
+                "Unsubscribe can't have an empty topic list",
+            )))
         } else {
             Ok(Packet::Unsubscribe(packet_unsubscribe))
         }
@@ -155,6 +159,9 @@ mod tests {
         unsubscribe_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Unsubscribe::read_from(&mut buff, 0xa2);
-        assert_eq!(to_test.unwrap_err().to_string(), "Unsubscribe can't have an empty topic list");
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            "Unsubscribe can't have an empty topic list"
+        );
     }
 }

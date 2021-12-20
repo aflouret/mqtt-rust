@@ -1,6 +1,6 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use std::io::{Cursor, Read, Write};
 use crate::parser::{decode_remaining_length, encode_remaining_length};
+use std::io::{Cursor, Read, Write};
 
 pub const UNSUBACK_PACKET_TYPE: u8 = 0xb0;
 const UNSUBACK_REMAINING_LENGTH: u32 = 2;
@@ -12,9 +12,7 @@ pub struct Unsuback {
 
 impl Unsuback {
     pub fn new(packet_id: u16) -> Unsuback {
-        Unsuback {
-            packet_id,
-        }
+        Unsuback { packet_id }
     }
 }
 
@@ -24,7 +22,7 @@ impl WritePacket for Unsuback {
         // Escribimos el Packet Type
         stream.write_all(&[UNSUBACK_PACKET_TYPE])?;
 
-        //Escribimos el remaining length 
+        //Escribimos el remaining length
         let remaining_length_encoded = encode_remaining_length(UNSUBACK_REMAINING_LENGTH);
         for byte in remaining_length_encoded {
             stream.write_all(&[byte])?;
@@ -39,7 +37,10 @@ impl WritePacket for Unsuback {
 }
 
 impl ReadPacket for Unsuback {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(
+        stream: &mut dyn Read,
+        initial_byte: u8,
+    ) -> Result<Packet, Box<dyn std::error::Error>> {
         verify_unsuback_byte(&initial_byte)?;
         let remaining_length = decode_remaining_length(stream)?;
         verify_remaining_length_byte(&remaining_length)?;
@@ -63,7 +64,7 @@ fn verify_remaining_length_byte(byte: &u32) -> Result<(), String> {
     Ok(())
 }
 
-fn verify_unsuback_byte(byte: &u8) -> Result<(), String>{
+fn verify_unsuback_byte(byte: &u8) -> Result<(), String> {
     match *byte {
         UNSUBACK_PACKET_TYPE => Ok(()),
         _ => Err("Wrong First Byte".to_string()),
@@ -81,7 +82,7 @@ mod tests {
     }
 
     #[test]
-    fn error_wrong_first_byte(){
+    fn error_wrong_first_byte() {
         let byte: u8 = 0xa0;
         let to_test = verify_unsuback_byte(&byte);
         assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");

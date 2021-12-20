@@ -1,6 +1,8 @@
-use crate::packet::{Packet, ReadPacket, WritePacket, Qos};
+use crate::packet::{Packet, Qos, ReadPacket, WritePacket};
+use crate::parser::{
+    decode_mqtt_string, decode_remaining_length, encode_mqtt_string, encode_remaining_length,
+};
 use std::io::{Cursor, Read, Write};
-use crate::parser::{decode_remaining_length, decode_mqtt_string, encode_remaining_length, encode_mqtt_string};
 
 pub const PUBLISH_PACKET_TYPE: u8 = 0x30;
 
@@ -13,7 +15,12 @@ pub struct Publish {
 }
 
 impl Publish {
-    pub fn new(flags: PublishFlags, topic_name: String, packet_id: Option<u16>, application_message: String) -> Publish {
+    pub fn new(
+        flags: PublishFlags,
+        topic_name: String,
+        packet_id: Option<u16>,
+        application_message: String,
+    ) -> Publish {
         Publish {
             flags,
             topic_name,
@@ -22,10 +29,10 @@ impl Publish {
         }
     }
 
-    fn get_remaining_length(&self) -> Result<u32, String> {  
+    fn get_remaining_length(&self) -> Result<u32, String> {
         //VARIABLE HEADER
         let mut length = encode_mqtt_string(&self.topic_name)?.len();
-        if let Some(packet_identifier) = self.packet_id{
+        if let Some(packet_identifier) = self.packet_id {
             length += packet_identifier.to_be_bytes().len();
         }
 
@@ -40,10 +47,10 @@ impl WritePacket for Publish {
     fn write_to(&self, stream: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
         // FIXED HEADER
         // Escribimos el packet type + los flags del publish packet
-        let first_byte = PUBLISH_PACKET_TYPE | 
-        (self.flags.duplicate as u8) << 3 | 
-        (self.flags.qos_level as u8) << 1 |
-        (self.flags.retain as u8);
+        let first_byte = PUBLISH_PACKET_TYPE
+            | (self.flags.duplicate as u8) << 3
+            | (self.flags.qos_level as u8) << 1
+            | (self.flags.retain as u8);
         stream.write_all(&[first_byte])?;
         // Escribimos el remaining length
         let remaining_length = self.get_remaining_length();
@@ -72,13 +79,15 @@ impl WritePacket for Publish {
             stream.write_all(&[*byte])?;
         }
 
-        
         Ok(())
     }
 }
 
 impl ReadPacket for Publish {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(
+        stream: &mut dyn Read,
+        initial_byte: u8,
+    ) -> Result<Packet, Box<dyn std::error::Error>> {
         verify_publish_byte(&initial_byte)?;
         verify_qos(&initial_byte)?;
         let publish_flags = PublishFlags::new(initial_byte);
@@ -101,8 +110,8 @@ impl ReadPacket for Publish {
                 bytes_read += 2;
                 Some(u16::from_be_bytes(bytes))
             }
-            
-            _ => None
+
+            _ => None,
         };
 
         let mut app_message_bytes = vec![0u8; (remaining_length - bytes_read) as usize];
@@ -110,26 +119,25 @@ impl ReadPacket for Publish {
         remaining_bytes.read_exact(&mut app_message_bytes)?;
         let application_message = String::from_utf8(app_message_bytes)?;
 
-
         Ok(Packet::Publish(Publish::new(
             publish_flags,
             topic_name,
             packet_id,
-            application_message
+            application_message,
         )))
     }
 }
 
-fn verify_topic_name_withoud_wildcards(topic_name: &str)-> Result<(), String> {
+fn verify_topic_name_withoud_wildcards(topic_name: &str) -> Result<(), String> {
     //The Topic Name in the PUBLISH Packet MUST NOT contain wildcard characters: ‘#’, ‘+’, '$'
-    if topic_name.contains('#') || topic_name.contains('$') || topic_name.contains('+'){
+    if topic_name.contains('#') || topic_name.contains('$') || topic_name.contains('+') {
         return Err("The Topic name contains a wildcard".to_string());
     }
 
     Ok(())
 }
 
-fn verify_publish_byte(byte: &u8) -> Result<(), String>{
+fn verify_publish_byte(byte: &u8) -> Result<(), String> {
     match *byte & 0xF0 {
         PUBLISH_PACKET_TYPE => Ok(()),
         _ => Err("Wrong First Byte".to_string()),
@@ -153,9 +161,7 @@ fn verify_publish_flags(flags: &PublishFlags) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublishFlags {
     pub duplicate: bool,
     pub qos_level: Qos,
@@ -166,7 +172,7 @@ impl PublishFlags {
     pub fn new(initial_byte: u8) -> PublishFlags {
         let retain = (initial_byte & 0x01) != 0;
         let duplicate = (initial_byte & 0x08) != 0;
-        let qos_level = match (initial_byte & 0x02) >> 1  {
+        let qos_level = match (initial_byte & 0x02) >> 1 {
             0 => Qos::AtMostOnce,
             _ => Qos::AtLeastOnce,
         };
@@ -196,7 +202,6 @@ mod tests {
 
         let to_test = publish.get_remaining_length().unwrap();
         assert_eq!(to_test, 14);
-
     }
 
     #[test]
@@ -207,15 +212,13 @@ mod tests {
             Some(15),
             "Message".to_string(),
         );
-        println!("{:?}",publish);
+        println!("{:?}", publish);
         let to_test = publish.get_remaining_length().unwrap();
         assert_eq!(to_test, 16);
-
     }
 
     #[test]
     fn correct_new_publishflag_all_true() {
-        
         let to_test = PublishFlags::new(0b0100_1011);
 
         assert_eq!(to_test.duplicate, true);
@@ -231,7 +234,7 @@ mod tests {
         assert_eq!(to_test.qos_level, Qos::AtMostOnce);
         assert_eq!(to_test.retain, false);
     }
-    
+
     #[test]
     fn correct_packet_qos1() {
         let publish_packet = Publish::new(
@@ -247,7 +250,7 @@ mod tests {
         let to_test = Publish::read_from(&mut buff, 0x3b).unwrap();
         if let Packet::Publish(to_test) = to_test {
             assert!(
-                    to_test.topic_name == publish_packet.topic_name
+                to_test.topic_name == publish_packet.topic_name
                     && to_test.packet_id == publish_packet.packet_id
                     && to_test.application_message == publish_packet.application_message
             )
@@ -270,7 +273,10 @@ mod tests {
         if let Packet::Publish(to_test) = to_test {
             assert_eq!(to_test.topic_name, publish_packet.topic_name);
             assert_eq!(to_test.packet_id, publish_packet.packet_id);
-            assert_eq!(to_test.application_message, publish_packet.application_message);
+            assert_eq!(
+                to_test.application_message,
+                publish_packet.application_message
+            );
         }
     }
 
@@ -319,7 +325,10 @@ mod tests {
         publish_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Publish::read_from(&mut buff, 0b0011_0001);
-        assert_eq!(to_test.unwrap_err().to_string(), "The Topic name contains a wildcard");
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            "The Topic name contains a wildcard"
+        );
     }
 
     #[test]
@@ -335,7 +344,10 @@ mod tests {
         publish_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Publish::read_from(&mut buff, 0b0011_0001);
-        assert_eq!(to_test.unwrap_err().to_string(), "The Topic name contains a wildcard");
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            "The Topic name contains a wildcard"
+        );
     }
 
     #[test]
@@ -351,7 +363,10 @@ mod tests {
         publish_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Publish::read_from(&mut buff, 0b0011_0001);
-        assert_eq!(to_test.unwrap_err().to_string(), "The Topic name contains a wildcard");
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            "The Topic name contains a wildcard"
+        );
     }
 
     #[test]
@@ -367,6 +382,9 @@ mod tests {
         publish_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Publish::read_from(&mut buff, 0b0011_1001);
-        assert_eq!(to_test.unwrap_err().to_string(), "The DUP flag MUST be set to 0 for all QoS 0 messages");
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            "The DUP flag MUST be set to 0 for all QoS 0 messages"
+        );
     }
 }

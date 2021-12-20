@@ -24,7 +24,7 @@ fn match_levels(filter: &[&str], topic: &[&str]) -> bool {
             return false;
         }
     }
-    
+
     true
 }
 

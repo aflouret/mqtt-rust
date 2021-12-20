@@ -1,6 +1,6 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use std::io::{Read, Write};
 use crate::parser::{decode_remaining_length, encode_remaining_length};
+use std::io::{Read, Write};
 
 const PINGREQ_REMAINING_LENGTH: u32 = 0;
 pub const PINGREQ_PACKET_TYPE: u8 = 0xc0;
@@ -9,7 +9,7 @@ pub const PINGREQ_PACKET_TYPE: u8 = 0xc0;
 pub struct Pingreq;
 
 impl Pingreq {
-    pub fn new() -> Pingreq{
+    pub fn new() -> Pingreq {
         Pingreq {}
     }
 }
@@ -20,7 +20,7 @@ impl WritePacket for Pingreq {
         // Escribimos el Packet Type
         stream.write_all(&[PINGREQ_PACKET_TYPE])?;
 
-        //Escribimos el remaining length 
+        //Escribimos el remaining length
         let remaining_length_encoded = encode_remaining_length(PINGREQ_REMAINING_LENGTH);
         for byte in remaining_length_encoded {
             stream.write_all(&[byte])?;
@@ -31,7 +31,10 @@ impl WritePacket for Pingreq {
 }
 
 impl ReadPacket for Pingreq {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(
+        stream: &mut dyn Read,
+        initial_byte: u8,
+    ) -> Result<Packet, Box<dyn std::error::Error>> {
         verify_disconnect_byte(&initial_byte)?;
         let remaining_length = decode_remaining_length(stream)?;
         verify_remaining_length_byte(&remaining_length)?;
@@ -46,7 +49,7 @@ impl Default for Pingreq {
     }
 }
 
-fn verify_disconnect_byte(byte: &u8) -> Result<(), String>{
+fn verify_disconnect_byte(byte: &u8) -> Result<(), String> {
     match *byte {
         PINGREQ_PACKET_TYPE => Ok(()),
         _ => Err("Wrong First Byte".to_string()),
@@ -78,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn error_wrong_first_byte(){
+    fn error_wrong_first_byte() {
         let byte: u8 = 0xb0;
         let to_test = verify_disconnect_byte(&byte);
         assert_eq!(to_test.unwrap_err().to_string(), "Wrong First Byte");

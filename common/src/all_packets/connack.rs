@@ -1,6 +1,6 @@
 use crate::packet::{Packet, ReadPacket, WritePacket};
-use std::io::{Read, Write, Cursor};
 use crate::parser::{decode_remaining_length, encode_remaining_length};
+use std::io::{Cursor, Read, Write};
 
 pub const CONNACK_PACKET_TYPE: u8 = 0x20;
 const CONNACK_REMAINING_LENGTH: u32 = 2;
@@ -49,7 +49,10 @@ impl WritePacket for Connack {
 }
 
 impl ReadPacket for Connack {
-    fn read_from(stream: &mut dyn Read, initial_byte: u8) -> Result<Packet, Box<dyn std::error::Error>> {
+    fn read_from(
+        stream: &mut dyn Read,
+        initial_byte: u8,
+    ) -> Result<Packet, Box<dyn std::error::Error>> {
         verify_connack_byte(&initial_byte)?;
         let remaining_length = decode_remaining_length(stream)?;
         verify_remaining_length_byte(&remaining_length)?;
@@ -79,7 +82,7 @@ impl ReadPacket for Connack {
     }
 }
 
-fn verify_connack_byte(byte: &u8) -> Result<(), String>{
+fn verify_connack_byte(byte: &u8) -> Result<(), String> {
     match *byte {
         CONNACK_PACKET_TYPE => Ok(()),
         _ => Err("Wrong First Byte".to_string()),
@@ -87,7 +90,7 @@ fn verify_connack_byte(byte: &u8) -> Result<(), String>{
 }
 
 fn verify_flags_byte(byte: &[u8; 1]) -> Result<(), String> {
-    //Byte 1 is the "Connect Acknowledge Flags". Bits 7-1 are reserved and MUST be set to 0. 
+    //Byte 1 is the "Connect Acknowledge Flags". Bits 7-1 are reserved and MUST be set to 0.
     if byte[0] & !0x1 != 0x0 {
         return Err("Invalid Flags".into());
     }
@@ -111,8 +114,8 @@ fn verify_packet(session_present_flag: bool, connect_return_code: u8) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn correct_flag_byte_0() {
@@ -174,6 +177,9 @@ mod tests {
         connack_packet.write_to(&mut buff).unwrap();
         buff.set_position(1);
         let to_test = Connack::read_from(&mut buff, 0x20);
-        assert_eq!(to_test.unwrap_err().to_string(), "Session present must be 0");
+        assert_eq!(
+            to_test.unwrap_err().to_string(),
+            "Session present must be 0"
+        );
     }
 }
