@@ -182,14 +182,14 @@ impl Client {
                         sender_intern.send(intern).unwrap();
                         println!("CLIENT: PUBACK packet successful received");
                         let puback_response = ResponseHandlers::PubackResponse(
-                            PubackResponse::new("PubackResponse".to_string())
+                            PubackResponse::new("Published correctly".to_string())
                         );
                         sender.send(puback_response).unwrap();
-                        thread::sleep(Duration::new(2, 0));
-                        sender.
+                       // thread::sleep(Duration::new(2, 0));
+/*                        sender.
                             send(ResponseHandlers::PubackResponse(
                                 PubackResponse::new("".to_string())))
-                            .unwrap();
+                            .unwrap();*/
                         println!("CLIENT: Packet id enviado internamente para liberar");
 
                         //mandar via channel el puback al puback processor,
