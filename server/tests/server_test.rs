@@ -15,7 +15,7 @@ use std::net::TcpStream;
 
 #[test]
 fn main() {
-    //test01();
+    test01();
     test02();
 }
 
@@ -42,8 +42,8 @@ fn test02() {
 }
 
 fn run_server() -> JoinHandle<()> {
-    let config = Config::new();
-    let logger = Logger::new(config.get_logfilename());
+    let config = Config::default();
+    let logger = Logger::new(&config.log_filename);
     let server = Server::new(config, Arc::new(logger.unwrap())).unwrap();
     thread::spawn(move || {
         server.server_run().unwrap();

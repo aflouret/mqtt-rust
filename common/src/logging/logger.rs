@@ -11,7 +11,7 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn new(file_path: String) -> Result<Logger, Box<dyn std::error::Error>> {
+    pub fn new(file_path: &str) -> Result<Logger, Box<dyn std::error::Error>> {
         if let Ok(mut file) = File::create(file_path) {
             let (sender, receiver) = mpsc::channel::<LogMessage>();
             thread::spawn(move || loop {

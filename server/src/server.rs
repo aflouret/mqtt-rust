@@ -25,12 +25,12 @@ impl Server {
 
     pub fn server_run(self) -> Result<(), Box<dyn std::error::Error>> {
         //Inicializacion
-        let address = self.config.get_address() + &*self.config.get_port();
+        let address = self.config.address.clone() + &self.config.port.to_string();
         let listener = TcpListener::bind(&address)?;
         println!("Servidor escuchando en: {} ", &address);
         self.logger.log_msg(LogMessage::new(
-            "Servidor escuchando:".to_string(),
-            "8080".to_string(),
+            format!("Servidor escuchando en: {}", &address),
+            "".to_string(),
         ))?;
         let senders_to_c_h_writers = Arc::new(RwLock::new(HashMap::<
             u32,
