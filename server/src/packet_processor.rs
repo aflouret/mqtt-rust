@@ -127,44 +127,44 @@ impl PacketProcessor {
 
     pub fn handle_disconnect_error(&mut self, c_h_id: u32) {
         // Obtenemos la session del c_h_id. Si no existe, es porque ya se desconectó el client con Disconnect
-        let session = match self
-            .sessions
-            .iter()
-            .find(|(_id, session)| session.get_client_handler_id() == Some(c_h_id))
-        {
+        let session = match self.sessions.iter()
+            .find(|(_id, session)| session.get_client_handler_id() == Some(c_h_id)) {
             Some((_client_id, session)) => session,
-            None => return,
+            None =>  return
         };
 
         println!("Session: {:?}", session);
 
         // Si hay last will
-        if session.last_will_msg.is_some() {
+        if let Some(_) = session.last_will_msg {
             // Mandamos el publish con el last will msg al last will topic
             let mut p = None;
             if let Some(level) = session.last_will_qos {
                 if level == Qos::AtLeastOnce {
-                    if let Some(packet_id) =
-                        PacketProcessor::find_key_for_value(self.packets_id.clone(), false)
-                    {
+                    if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
                         p = Some(packet_id);
                         self.packets_id.insert(packet_id, true);
                     }
                 }
             }
+            /*
+            if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
+                p = Some(packet_id);
+                self.packets_id.insert(packet_id, true);
+            }
+            */
 
             // Mandamos el publish a los suscriptores
             //TODO: solo hacer si es que hay last will
+            let sess = session.clone();
             let publish_packet = Publish::new(
                 PublishFlags {
                     duplicate: false,
-                    qos_level: session.last_will_qos.unwrap(),
-                    retain: session.last_will_retain,
-                },
-                session.last_will_topic.as_ref().unwrap().clone(),
+                    qos_level: sess.last_will_qos.unwrap(),
+                    retain: sess.last_will_retain },
+                sess.last_will_topic.as_ref().unwrap().clone(),
                 p,
-                session.last_will_msg.as_ref().unwrap().clone(),
-            );
+                sess.last_will_msg.as_ref().unwrap().clone());
 
             print!("Voy a mandar el publish last will {:?}", publish_packet);
 
