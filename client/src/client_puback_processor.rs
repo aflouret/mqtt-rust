@@ -22,7 +22,7 @@ impl PubackProcessor {
         PubackProcessor {
             rx_from_client,
             publish_packets: vec![],
-            sender_to_event_handler_client: sender_to_event_handler_client,
+            sender_to_event_handler_client,
         }
     }
 

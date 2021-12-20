@@ -99,6 +99,17 @@ impl Session {
     pub fn store_publish_packet(&mut self, publish_packet: Publish) {
         self.unacknowledged_messages.push(publish_packet);
     }
+
+    pub fn update_last_will(&mut self, connect_packet: &Connect){
+        self.last_will_msg = connect_packet.connect_payload.last_will_message.clone();
+        self.last_will_topic = connect_packet.connect_payload.last_will_topic.clone();
+        self.last_will_retain = connect_packet.last_will_retain;
+        if connect_packet.last_will_qos {
+            self.last_will_qos = Some(Qos::AtLeastOnce);
+        } else {
+            self.last_will_qos = Some(Qos::AtMostOnce);
+        }
+    }
 }
 
 fn parse_connect_data(packet_connect: &Connect) -> ClientData {

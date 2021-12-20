@@ -136,7 +136,7 @@ impl PacketProcessor {
         println!("Session: {:?}", session);
 
         // Si hay last will
-        if let Some(_) = session.last_will_msg {
+        if session.last_will_msg.is_some() {
             // Mandamos el publish con el last will msg al last will topic
             let mut p = None;
             if let Some(level) = session.last_will_qos {
@@ -147,24 +147,17 @@ impl PacketProcessor {
                     }
                 }
             }
-            /*
-            if let Some(packet_id) = PacketProcessor::find_key_for_value(self.packets_id.clone(), false) {
-                p = Some(packet_id);
-                self.packets_id.insert(packet_id, true);
-            }
-            */
 
             // Mandamos el publish a los suscriptores
             //TODO: solo hacer si es que hay last will
-            let sess = session.clone();
             let publish_packet = Publish::new(
                 PublishFlags {
                     duplicate: false,
-                    qos_level: sess.last_will_qos.unwrap(),
-                    retain: sess.last_will_retain },
-                sess.last_will_topic.as_ref().unwrap().clone(),
+                    qos_level: session.last_will_qos.unwrap(),
+                    retain: session.last_will_retain },
+                session.last_will_topic.as_ref().unwrap().clone(),
                 p,
-                sess.last_will_msg.as_ref().unwrap().clone());
+                session.last_will_msg.as_ref().unwrap().clone());
 
             print!("Voy a mandar el publish last will {:?}", publish_packet);
 
@@ -302,7 +295,7 @@ impl PacketProcessor {
         let exists_previous_session = self.sessions.contains_key(&client_id);
 
         // Si hay un cliente con mismo client_id conectado, desconectamos la sesión del client anterior
-        if let Some(existing_session) = self.sessions.get(&client_id) {
+        if let Some(existing_session) = self.sessions.get_mut(&client_id) {
             println!("\n Session existente ------> {:?} \n ", existing_session);
             if existing_session.is_active() {
                 let existing_handler_id = existing_session.get_client_handler_id().unwrap();
@@ -312,6 +305,8 @@ impl PacketProcessor {
                         .to_string(),
                     client_id.clone(),
                 ))?;
+            } else {
+                existing_session.update_last_will(&connect_packet);
             }
         }
 
