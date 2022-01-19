@@ -3,4 +3,6 @@ members = [
     'client',
     'server',
     'common',
+    'random-client',
+    'http-server'
 ]

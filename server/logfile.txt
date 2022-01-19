@@ -1,13 +1,4 @@
-Servidor escuchando: 8080
-Connect Packet received from: No client id yet
-Connack packet send it to: 0
-Subscribe Packet received from: a
-Publish Packet received from: a
-Puback Packet received from: a
-Publish Packet received from: a
-Puback Packet received from: a
-Connect Packet received from: No client id yet
-Connack packet send it to: 1
-Subscribe Packet received from: a
-Publish Packet received from: a
-Puback Packet received from: a
+Servidor escuchando en: 0.0.0.0:8080 
+Connect Packet received from: a
+Connack packet send it to: a
+Disconnect Packet received from: a

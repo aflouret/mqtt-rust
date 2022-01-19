@@ -119,8 +119,8 @@ fn handle_connect_tab(builder: gtk::Builder, sender: Sender<EventHandlers>) {
     let last_will_retain: gtk::CheckButton = builder.object("last_will_retain_check").unwrap();
     let last_will_qos: gtk::CheckButton = builder.object("last_will_qos_check").unwrap();
 
-    ip_entry.set_text("127.0.0.1");
-    port_entry.set_text("8080");
+/*    ip_entry.set_text("200.126.213.24");
+    port_entry.set_text("8080");*/
     keep_alive_entry.set_text("300");
 
     let sender_for_disconnect = sender.clone();
