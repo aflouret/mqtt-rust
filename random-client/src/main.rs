@@ -7,13 +7,16 @@ Se permite utilizar el crate rand para la generación de valores.
 */
 
 mod thermostat;
-use common::packet::{Subscription, Qos};
+const IP: &str = "0.0.0.0";
+const PORT: &str = "8080";
+const TOPIC: &str = "topica";
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut thermostat = thermostat::Thermostat::new();
-    thermostat.connect_to("0.0.0.0:8080".to_string()).unwrap();
+    thermostat.connect_to(IP.to_string() + ":" + PORT)?;
     println!("Me conecté con exito");
-    thermostat.subscribe_to(Subscription{ topic_filter: "topica".to_string(), max_qos: Qos::AtMostOnce });
-    println!("Me subscribí con exito");
-    thermostat.run();
+    thermostat.publish_in(TOPIC.to_string());
+    println!("Añadí topic con exito");
+    thermostat.run()?;
+    Ok(())
 }
