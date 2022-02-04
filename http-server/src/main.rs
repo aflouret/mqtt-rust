@@ -22,7 +22,7 @@ use std::sync::{mpsc, Mutex};
 use std::sync::Arc;
 mod mqtt_client;
 
-const HTML_PATH: &str = "src/publishing_page.html";
+const ERROR_HTML_PATH: &str = "src/error.html";
 const IP: &str = "0.0.0.0";
 const PORT: &str = "8081";
 const IP_MQTT: &str = "0.0.0.0";
@@ -86,16 +86,29 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) {
     // Imprime el request del navegador para conectarse al server (yo)
     println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
 
-    // Generamos la response con la temperatura que nos llegó del client MQTT
-    //let html_in_string = fs::read_to_string(HTML_PATH).unwrap();
+    let get = b"GET / HTTP/1.1\r\n";
+    let response;
+    if buffer.starts_with(get) {
+        // Generamos la response con la temperatura que nos llegó del client MQTT
+        //let html_in_string = fs::read_to_string(HTML_PATH).unwrap();
 
-    let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
-    println!("el html actual es: {}", html_in_string);
-    let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-        html_in_string.len(),
-        html_in_string
-    );
+        let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
+        println!("el html actual es: {}", html_in_string);
+        response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            html_in_string.len(),
+            html_in_string
+        );  
+    }
+    else {
+        println!("Request incorrecto. Enviando código de error 404...");
+        let html_in_string = fs::read_to_string(ERROR_HTML_PATH).unwrap();
+        response = format!(
+            "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\n\r\n{}",
+            html_in_string.len(),
+            html_in_string
+        );
+    }
 
     stream.write_all(response.as_bytes()).unwrap();
     stream.flush().unwrap();
