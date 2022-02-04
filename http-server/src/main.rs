@@ -20,6 +20,7 @@ use std::thread;
 use common::packet::{Qos};
 use std::sync::{mpsc, Mutex};
 use std::sync::Arc;
+use response::Response;
 mod mqtt_client;
 mod request;
 mod response;
@@ -96,23 +97,25 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) {
 
         let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
         println!("el html actual es: {}", html_in_string);
-        response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            html_in_string.len(),
-            html_in_string
-        );  
+        response = Response::new(
+            "HTTP/1.1",
+            200, 
+            "OK",
+            Some(vec![format!("Content-Length: {}", html_in_string.len())]),
+        Some(html_in_string)); 
     }
     else {
         println!("Request incorrecto. Enviando código de error 404...");
         let html_in_string = fs::read_to_string(ERROR_HTML_PATH).unwrap();
-        response = format!(
-            "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\n\r\n{}",
-            html_in_string.len(),
-            html_in_string
-        );
+        response = Response::new(
+            "HTTP/1.1",
+            404, 
+            "Not Found",
+            Some(vec![format!("Content-Length: {}", html_in_string.len())]),
+        Some(html_in_string));
     }
 
-    stream.write_all(response.as_bytes()).unwrap();
+    stream.write_all(response.to_string().as_bytes()).unwrap();
     stream.flush().unwrap();
 }
 

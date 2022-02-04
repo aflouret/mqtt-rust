@@ -1,27 +1,27 @@
 pub struct Response {
-  version: String,
-  status_code: u16,
-  status_text: String,
-  headers: Option<Vec<String>>,
-  body: Option<String>,
-}
-
-impl Response {
-  pub fn new(
     version: String,
     status_code: u16,
     status_text: String,
     headers: Option<Vec<String>>,
     body: Option<String>,
-  ) -> Response {
-    Response { 
-      version,
-      status_code,
-      status_text,
-      headers,
-      body,
+}
+
+impl Response {
+    pub fn new(
+        version: &str,
+        status_code: u16,
+        status_text: &str,
+        headers: Option<Vec<String>>,
+        body: Option<String>,
+    ) -> Response {
+        Response { 
+        version: version.to_string(),
+        status_code,
+        status_text: status_text.to_string(),
+        headers,
+        body,
+        }
     }
-  }
 
   pub fn to_string(&self) -> String {
     let mut response_string = format!(
@@ -55,9 +55,9 @@ mod tests {
         let body = "asdf";
         let content_length_header = format!("Content-Length: {}", body.len());
         let response = Response::new(
-          "HTTP/1.1".to_string(),
+          "HTTP/1.1",
           200,
-          "OK".to_string(),
+          "OK",
           Some(vec![content_length_header.to_string()]),
           Some(body.to_string())
         );
