@@ -21,6 +21,8 @@ use common::packet::{Qos};
 use std::sync::{mpsc, Mutex};
 use std::sync::Arc;
 mod mqtt_client;
+mod request;
+mod response;
 
 const ERROR_HTML_PATH: &str = "src/error.html";
 const IP: &str = "0.0.0.0";
