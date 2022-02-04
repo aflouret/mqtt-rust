@@ -79,8 +79,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) {
     let mut buffer = [0; 1024];
 
-    stream.read(&mut buffer).unwrap();
-
+    if stream.read(&mut buffer).is_err() {
+        stream.shutdown(std::net::Shutdown::Both).unwrap();
+    }
+    
     // Imprime el request del navegador para conectarse al server (yo)
     println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
 
@@ -95,7 +97,7 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) {
         html_in_string
     );
 
-    stream.write(response.as_bytes()).unwrap();
+    stream.write_all(response.as_bytes()).unwrap();
     stream.flush().unwrap();
 }
 
