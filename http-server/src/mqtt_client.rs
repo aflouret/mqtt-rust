@@ -1,5 +1,6 @@
 use common::all_packets::connect::{Connect, ConnectPayload};
 use common::all_packets::connack::{CONNACK_CONNECTION_ACCEPTED};
+use common::all_packets::puback::{Puback};
 use common::all_packets::subscribe::{Subscribe};
 use common::all_packets::suback::{SubackReturnCode};
 use common::packet::{WritePacket, Packet, Qos, Subscription};
@@ -96,8 +97,12 @@ impl MQTTClient {
                 loop {
                     if let Ok(Packet::Publish(publish)) = Packet::read_from(&mut socket){
                         self.sender.send(publish.application_message).unwrap();
-                        //TODO: enviar puback en caso de qos 1?
+                        if let Some(packet_id) = publish.packet_id {
+                            let puback = Puback::new(packet_id);
+                                Packet::Puback(puback).write_to(&mut socket).unwrap();
+                        }                          
                     }
+
                 }
             }
         });
