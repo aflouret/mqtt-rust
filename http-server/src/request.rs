@@ -1,3 +1,5 @@
+use std::{io::Read, net::TcpStream};
+
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub struct Request {
@@ -24,8 +26,20 @@ impl Request {
         body,
         }
     }
+    pub fn read_from(stream: &mut TcpStream) -> Result<Request, Box<dyn std::error::Error>> {
+        let mut buffer = [0; 1024];
 
-    pub fn from_string(request_string: &str) -> Result<Request, String> {
+        if stream.read(&mut buffer).is_err() {
+            stream.shutdown(std::net::Shutdown::Both)?;
+    }
+        println!("Read from socket: {}", String::from_utf8_lossy(&buffer[..]));
+
+        let request = Request::from_string(std::str::from_utf8(&buffer)?);
+        println!("Request: {:?}", request);
+        return request;
+    }
+
+    pub fn from_string(request_string: &str) -> Result<Request, Box<dyn std::error::Error>> {
         
         let lines: Vec<&str> = request_string.lines().collect();
         println!("{:?}", lines);
@@ -69,10 +83,14 @@ impl Request {
             body: body,
         });
     }
+
+    // "simple get" -> el tipo de request que haría un browser para conectarse a este server
+    pub fn is_simple_get(&self) -> bool {
+        self.method == "GET".to_owned() && 
+        self.path == "/".to_owned() &&
+        self.version == "HTTP/1.1".to_owned()       
+    }
 }
-
-
-
 
 #[cfg(test)]
 mod tests {

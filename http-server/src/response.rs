@@ -1,3 +1,5 @@
+use std::{net::TcpStream, io::Write};
+
 pub struct Response {
     version: String,
     status_code: u16,
@@ -22,6 +24,12 @@ impl Response {
         body,
         }
     }
+
+  pub fn write_to(&self, stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    stream.write_all(self.to_string().as_bytes())?;
+    stream.flush()?;
+    Ok(())
+  }
 
   pub fn to_string(&self) -> String {
     let mut response_string = format!(

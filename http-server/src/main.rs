@@ -12,7 +12,6 @@ Se debe implementar la comunicación y el servidor a partir del uso de sockets T
 como se ha trabajado en el desarrollo del curso.
  */
 
-use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::fs;
@@ -21,6 +20,8 @@ use common::packet::{Qos};
 use std::sync::{mpsc, Mutex};
 use std::sync::Arc;
 use response::Response;
+
+use crate::request::Request;
 mod mqtt_client;
 mod request;
 mod response;
@@ -72,31 +73,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let stream = stream.unwrap();
 
         thread::spawn(move || {
-            handle_connection(stream, b);
+            handle_connection(stream, b).unwrap();
         });
     }
 
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) {
-    let mut buffer = [0; 1024];
-
-    if stream.read(&mut buffer).is_err() {
-        stream.shutdown(std::net::Shutdown::Both).unwrap();
-    }
+fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<(), Box<dyn std::error::Error>> {
+    let request = Request::read_from(&mut stream)?;
     
-    // Imprime el request del navegador para conectarse al server (yo)
-    println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
-
-    let get = b"GET / HTTP/1.1\r\n";
     let response;
-    if buffer.starts_with(get) {
+    if request.is_simple_get() {
         // Generamos la response con la temperatura que nos llegó del client MQTT
-        //let html_in_string = fs::read_to_string(HTML_PATH).unwrap();
-
         let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
-        println!("el html actual es: {}", html_in_string);
         response = Response::new(
             "HTTP/1.1",
             200, 
@@ -115,8 +105,7 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) {
         Some(html_in_string));
     }
 
-    stream.write_all(response.to_string().as_bytes()).unwrap();
-    stream.flush().unwrap();
+    response.write_to(&mut stream)
 }
 
 pub fn get_body(body: &str) -> String {
