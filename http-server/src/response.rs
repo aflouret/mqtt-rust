@@ -1,5 +1,7 @@
 use std::{net::TcpStream, io::Write};
 
+const HTTP_VERSION : &str ="HTTP/1.1";
+
 pub struct Response {
     version: String,
     status_code: u16,
@@ -10,14 +12,13 @@ pub struct Response {
 
 impl Response {
     pub fn new(
-        version: &str,
         status_code: u16,
         status_text: &str,
         headers: Option<Vec<String>>,
         body: Option<String>,
     ) -> Response {
         Response { 
-        version: version.to_string(),
+        version: HTTP_VERSION.to_string(),
         status_code,
         status_text: status_text.to_string(),
         headers,
@@ -62,7 +63,6 @@ mod tests {
         let body = "asdf";
         let content_length_header = format!("Content-Length: {}", body.len());
         let response = Response::new(
-          "HTTP/1.1",
           200,
           "OK",
           Some(vec![content_length_header.to_string()]),

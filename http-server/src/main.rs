@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let body = Arc::new(Mutex::new("    <h1>Current Temperature:</h1>".to_string()));
     let body_clone = body.clone();
-    thread::spawn(move || {
+    let join_handler = thread::spawn(move || {
         loop {
             if let Ok(message) = receiver.recv(){
                 body_clone.lock().unwrap().push_str(&format!("\n        <p>{}</p>", &message));
@@ -55,17 +55,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let listener = TcpListener::bind(IP.to_string() + ":" + PORT).unwrap();
+    let listener = TcpListener::bind(IP.to_string() + ":" + PORT)?;
 
+    let mut join_handles = vec![];
     for stream in listener.incoming() {
         let b = body.clone();
-        let stream = stream.unwrap();
+        let mut stream = stream.unwrap();
 
-        thread::spawn(move || {
-            handle_connection(stream, b).unwrap();
+        let join = thread::spawn(move || {
+            if let Err(server_error) = handle_connection(stream.try_clone().unwrap(), b) {
+                let response = Response::new(
+                    500,
+                    "server error...",
+                    Some(vec![format!("Content-Length: {}", "hola".len())]),
+                    Some("hola".to_string()));
+                response.write_to(&mut stream);
+            }
         });
+        join_handles.push(join);
     }
 
+    join_handler.join().unwrap();
+    for handle in join_handles {
+        handle.join().unwrap();
+    }
     Ok(())
 }
 
@@ -77,7 +90,6 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<
         //let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
         let html_in_string = get_main_html(&body.lock().unwrap().clone());
         response = Response::new(
-            "HTTP/1.1",
             200, 
             "OK",
             Some(vec![format!("Content-Length: {}", html_in_string.len())]),
@@ -87,7 +99,6 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<
         println!("Request incorrecto. Enviando código de error 404...");
         let html_in_string = fs::read_to_string(ERROR_HTML_PATH).unwrap();
         response = Response::new(
-            "HTTP/1.1",
             404, 
             "Not Found",
             Some(vec![format!("Content-Length: {}", html_in_string.len())]),
