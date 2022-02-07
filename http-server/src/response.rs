@@ -41,7 +41,7 @@ impl Response {
     if let Some(headers) = &self.headers {
       for header in headers {
         response_string.push_str("\r\n");
-        response_string.push_str(&header);
+        response_string.push_str(header);
       }
     }
     if let Some(body) = &self.body {
@@ -49,10 +49,9 @@ impl Response {
         response_string.push_str(body);
     }
     
-    return response_string;
+    response_string
   }
 }
-
 
 #[cfg(test)]
 mod tests {

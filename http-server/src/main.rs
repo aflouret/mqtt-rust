@@ -27,25 +27,14 @@ mod request;
 mod response;
 
 const ERROR_HTML_PATH: &str = "src/error.html";
+const HEADER_HTML_PATH: &str = "src/header.html";
+const FOOTER_HTML_PATH: &str = "src/footer.html";
 const IP: &str = "0.0.0.0";
 const PORT: &str = "8081";
 const IP_MQTT: &str = "0.0.0.0";
 const PORT_MQTT: &str = "8080";
 const TOPIC_MQTT: &str = "topica";
 const QOS_MQTT: Qos = Qos::AtMostOnce;
-
-pub const HEADER: &str = r#"<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>PublishingPage</title>
-  </head>
-"#;
-
-pub const FOOTER: &str = r#"
-</html>
-"#;
-
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (sender, receiver) = mpsc::channel::<String>();
@@ -82,11 +71,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<(), Box<dyn std::error::Error>> {
     let request = Request::read_from(&mut stream)?;
-    
     let response;
     if request.is_simple_get() {
         // Generamos la response con la temperatura que nos llegó del client MQTT
-        let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
+        //let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
+        let html_in_string = get_main_html(&body.lock().unwrap().clone());
         response = Response::new(
             "HTTP/1.1",
             200, 
@@ -108,11 +97,14 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<
     response.write_to(&mut stream)
 }
 
-pub fn get_body(body: &str) -> String {
-    format!(
+fn get_main_html(body: &str) -> String {
+    let html_header = fs::read_to_string(HEADER_HTML_PATH).unwrap();
+    let html_body = format!(
         r#"  <body>
     {}
   </body>"#,
         body
-    )
+    );
+    let html_footer = fs::read_to_string(FOOTER_HTML_PATH).unwrap();
+    html_header + &html_body + &html_footer
 }

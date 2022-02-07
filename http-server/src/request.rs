@@ -36,7 +36,7 @@ impl Request {
 
         let request = Request::from_string(std::str::from_utf8(&buffer)?);
         println!("Request: {:?}", request);
-        return request;
+        request
     }
 
     pub fn from_string(request_string: &str) -> Result<Request, Box<dyn std::error::Error>> {
@@ -59,7 +59,7 @@ impl Request {
             let mut headers_vec = vec![];
 
             //si tiene body
-            if lines[lines.len()-2] == "" {
+            if lines[lines.len()-2].is_empty() {
                 let headers_strings = &lines[1..lines.len()-2];
                 for header in headers_strings {
                     let header = String::from(*header);
@@ -75,20 +75,20 @@ impl Request {
             headers = Some(headers_vec);
         }
 
-        return Ok(Request {
+        Ok(Request {
             method: method.to_string(),
             path: path.to_string(),
             version: version.to_string(),
             headers,
-            body: body,
-        });
+            body,
+        })
     }
 
     // "simple get" -> el tipo de request que haría un browser para conectarse a este server
     pub fn is_simple_get(&self) -> bool {
-        self.method == "GET".to_owned() && 
-        self.path == "/".to_owned() &&
-        self.version == "HTTP/1.1".to_owned()       
+        self.method == "GET" && 
+        self.path == "/" &&
+        self.version == "HTTP/1.1"       
     }
 }
 
