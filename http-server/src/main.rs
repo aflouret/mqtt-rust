@@ -20,12 +20,12 @@ use common::packet::{Qos};
 use std::sync::{mpsc, Mutex};
 use std::sync::Arc;
 use response::Response;
-
 use crate::request::Request;
 mod mqtt_client;
 mod request;
 mod response;
 
+const HTTP_VERSION : &str ="HTTP/1.1";
 const ERROR_HTML_PATH: &str = "src/error.html";
 const HEADER_HTML_PATH: &str = "src/header.html";
 const FOOTER_HTML_PATH: &str = "src/footer.html";
@@ -35,6 +35,11 @@ const IP_MQTT: &str = "0.0.0.0";
 const PORT_MQTT: &str = "8080";
 const TOPIC_MQTT: &str = "topica";
 const QOS_MQTT: Qos = Qos::AtMostOnce;
+const SOCKET_WRITE_ERROR_MSG: &str = "Error de escritura en el socket";
+
+const OK_RETURN_CODE: &str = "200 OK";
+const NOT_FOUND_RETURN_CODE: &str = "404 Not Found";
+const SERVER_ERROR_RETURN_CODE: &str = " 500 Internal Server Error";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (sender, receiver) = mpsc::channel::<String>();
@@ -62,15 +67,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let b = body.clone();
         let mut stream = stream.unwrap();
 
-        let join = thread::spawn(move || {
-            if let Err(server_error) = handle_connection(stream.try_clone().unwrap(), b) {
+        let join = thread::spawn(move || -> Result<(), std::io::Error> {
+            if let Err(_) = handle_connection(stream.try_clone().unwrap(), b) {
                 let response = Response::new(
-                    500,
-                    "server error...",
+                    SERVER_ERROR_RETURN_CODE,
                     Some(vec![format!("Content-Length: {}", "hola".len())]),
-                    Some("hola".to_string()));
-                response.write_to(&mut stream);
+                    Some("hola".to_string())
+                );
+                response.write_to(&mut stream)?;
             }
+            Ok(())
         });
         join_handles.push(join);
     }
@@ -85,27 +91,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<(), Box<dyn std::error::Error>> {
     let request = Request::read_from(&mut stream)?;
     let response;
-    if request.is_simple_get() {
+    if request.wants_to_access_page() {
         // Generamos la response con la temperatura que nos llegó del client MQTT
         //let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
         let html_in_string = get_main_html(&body.lock().unwrap().clone());
         response = Response::new(
-            200, 
-            "OK",
+            OK_RETURN_CODE,
             Some(vec![format!("Content-Length: {}", html_in_string.len())]),
-        Some(html_in_string)); 
+            Some(html_in_string)
+        ); 
     }
     else {
         println!("Request incorrecto. Enviando código de error 404...");
         let html_in_string = fs::read_to_string(ERROR_HTML_PATH).unwrap();
         response = Response::new(
-            404, 
-            "Not Found",
+            NOT_FOUND_RETURN_CODE,
             Some(vec![format!("Content-Length: {}", html_in_string.len())]),
-        Some(html_in_string));
+            Some(html_in_string)
+        );
     }
 
-    response.write_to(&mut stream)
+    if let Err(_) = response.write_to(&mut stream) {
+        return Err(SOCKET_WRITE_ERROR_MSG.into());
+    }
+    Ok(())
 }
 
 fn get_main_html(body: &str) -> String {

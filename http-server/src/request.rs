@@ -84,11 +84,11 @@ impl Request {
         })
     }
 
-    // "simple get" -> el tipo de request que haría un browser para conectarse a este server
-    pub fn is_simple_get(&self) -> bool {
+    // El tipo de request que haría un browser para conectarse a este server y ver los mensajes
+    pub fn wants_to_access_page(&self) -> bool {
         self.method == "GET" && 
         self.path == "/" &&
-        self.version == "HTTP/1.1"       
+        self.version == crate::HTTP_VERSION       
     }
 }
 
