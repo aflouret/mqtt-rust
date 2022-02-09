@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let title = format!("    <h2>Listening to topic: {}</h2>", TOPIC_MQTT);
     let messages = Arc::new(Mutex::new(vec![title]));
     let messages_clone = messages.clone();
-    let join_handler = thread::spawn(move || {
+    thread::spawn(move || {
         loop {
             if let Ok(message) = receiver.recv(){
                 stack_mqtt_message(messages_clone.lock().unwrap(), &message);
@@ -67,25 +67,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let listener = TcpListener::bind(IP.to_string() + ":" + PORT)?;
 
-    let mut join_handles = vec![];
     for stream in listener.incoming() {
         let messages_clone = messages.clone();
         let mut stream = stream?;
 
-        let join = thread::spawn(move || -> Result<(), std::io::Error> {
+        thread::spawn(move || -> Result<(), std::io::Error> {
             if let Err(_) = handle_connection(stream.try_clone()?, messages_clone) {
                 let html_in_string = get_html(vec![fs::read_to_string(ERROR_500_HTML_PATH)?])?;
                 create_response(SERVER_ERROR_RETURN_CODE, html_in_string).write_to(&mut stream)?;
             }
             Ok(())
         });
-        join_handles.push(join);
     }
 
-    join_handler.join().unwrap();
-    for handle in join_handles {
-        handle.join().unwrap()?;        
-    }
     Ok(())
 }
 

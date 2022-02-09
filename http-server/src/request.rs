@@ -35,14 +35,12 @@ impl Request {
         println!("Read from socket: {}", String::from_utf8_lossy(&buffer[..]));
 
         let request = Request::from_string(std::str::from_utf8(&buffer)?);
-        println!("Request: {:?}", request);
         request
     }
 
     pub fn from_string(request_string: &str) -> Result<Request, Box<dyn std::error::Error>> {
         
         let lines: Vec<&str> = request_string.lines().collect();
-        println!("{:?}", lines);
         let start_line = lines[0];
         let start_line_elements: Vec<&str> = start_line.split(' ').collect();
         if start_line_elements.len() != 3 {
