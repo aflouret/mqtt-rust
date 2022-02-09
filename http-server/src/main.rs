@@ -12,9 +12,11 @@ Se debe implementar la comunicación y el servidor a partir del uso de sockets T
 como se ha trabajado en el desarrollo del curso.
  */
 
+use std::cmp::max;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::fs;
+use std::sync::MutexGuard;
 use std::thread;
 use common::packet::{Qos};
 use std::sync::{mpsc, Mutex};
@@ -36,6 +38,7 @@ const PORT_MQTT: &str = "8080";
 const TOPIC_MQTT: &str = "temperature";
 const QOS_MQTT: Qos = Qos::AtMostOnce;
 const SOCKET_WRITE_ERROR_MSG: &str = "Error de escritura en el socket";
+const N_MESSAGES_TO_SHOW: i16 = 5;
 
 const HTTP_VERSION : &str ="HTTP/1.1";
 const OK_RETURN_CODE: &str = "200 OK";
@@ -52,12 +55,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     client.run();
 
     let title = format!("    <h2>Listening to topic: {}</h2>", TOPIC_MQTT);
-    let body = Arc::new(Mutex::new(title));
-    let body_clone = body.clone();
+    let messages = Arc::new(Mutex::new(vec![title]));
+    let messages_clone = messages.clone();
     let join_handler = thread::spawn(move || {
         loop {
             if let Ok(message) = receiver.recv(){
-                body_clone.lock().unwrap().push_str(&format!("\n        <p>{}</p>", &message));
+                stack_mqtt_message(messages_clone.lock().unwrap(), &message);
             }
         }
     });
@@ -66,12 +69,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut join_handles = vec![];
     for stream in listener.incoming() {
-        let body_clone = body.clone();
+        let messages_clone = messages.clone();
         let mut stream = stream?;
 
         let join = thread::spawn(move || -> Result<(), std::io::Error> {
-            if let Err(_) = handle_connection(stream.try_clone()?, body_clone) {
-                let html_in_string = get_html(fs::read_to_string(ERROR_500_HTML_PATH)?)?;
+            if let Err(_) = handle_connection(stream.try_clone()?, messages_clone) {
+                let html_in_string = get_html(vec![fs::read_to_string(ERROR_500_HTML_PATH)?])?;
                 create_response(SERVER_ERROR_RETURN_CODE, html_in_string).write_to(&mut stream)?;
             }
             Ok(())
@@ -86,17 +89,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<(), Box<dyn std::error::Error>> {
+fn handle_connection(mut stream: TcpStream, messages: Arc<Mutex<Vec<String>>>) -> Result<(), Box<dyn std::error::Error>> {
     let request = Request::read_from(&mut stream)?;
     let response;
     let html_in_string;
     if request.wants_to_access_page() {
-        html_in_string = get_html(body.lock().unwrap().clone().to_owned())?;
+        html_in_string = get_html(messages.lock().unwrap().clone().to_owned())?;
         response = create_response(OK_RETURN_CODE, html_in_string);
     }
     else {
         println!("Request incorrecto. Enviando código de error 404...");
-        html_in_string = get_html(fs::read_to_string(ERROR_404_HTML_PATH)?)?;
+        html_in_string = get_html(vec![fs::read_to_string(ERROR_404_HTML_PATH)?])?;
         response = create_response(NOT_FOUND_RETURN_CODE, html_in_string);
     } 
 
@@ -108,13 +111,19 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<
 
 // Aux functions
 
-fn get_html(body: String) -> Result<String, std::io::Error> {
+fn stack_mqtt_message(mut messages_vector: MutexGuard<'_, Vec<String>, >, message: &str) {
+    messages_vector.push(format!("\n        <p>{}</p>", message));
+    let elements_to_remove = max(0_i16, messages_vector.len() as i16 - N_MESSAGES_TO_SHOW -1_i16) as usize;
+    messages_vector.drain(1..elements_to_remove+1);
+}
+
+fn get_html(messages: Vec<String>) -> Result<String, std::io::Error> {
     let html_header = fs::read_to_string(HEADER_HTML_PATH)?;
     let html_body = format!(
         r#"  <body>
     {}
   </body>"#,
-        body
+        messages.join("")
     );
     let html_footer = fs::read_to_string(FOOTER_HTML_PATH)?;
     Ok(html_header + &html_body + &html_footer)
