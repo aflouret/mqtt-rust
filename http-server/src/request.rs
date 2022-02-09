@@ -35,14 +35,12 @@ impl Request {
         println!("Read from socket: {}", String::from_utf8_lossy(&buffer[..]));
 
         let request = Request::from_string(std::str::from_utf8(&buffer)?);
-        println!("Request: {:?}", request);
         request
     }
 
     pub fn from_string(request_string: &str) -> Result<Request, Box<dyn std::error::Error>> {
         
         let lines: Vec<&str> = request_string.lines().collect();
-        println!("{:?}", lines);
         let start_line = lines[0];
         let start_line_elements: Vec<&str> = start_line.split(' ').collect();
         if start_line_elements.len() != 3 {
@@ -75,20 +73,20 @@ impl Request {
             headers = Some(headers_vec);
         }
 
-        Ok(Request {
-            method: method.to_string(),
-            path: path.to_string(),
-            version: version.to_string(),
+        Ok(Request::new(
+            method,
+            path,
+            version,
             headers,
             body,
-        })
+        ))
     }
 
-    // "simple get" -> el tipo de request que haría un browser para conectarse a este server
-    pub fn is_simple_get(&self) -> bool {
+    // El tipo de request que haría un browser para conectarse a este server y ver los mensajes
+    pub fn wants_to_access_page(&self) -> bool {
         self.method == "GET" && 
         self.path == "/" &&
-        self.version == "HTTP/1.1"       
+        self.version == crate::HTTP_VERSION       
     }
 }
 
