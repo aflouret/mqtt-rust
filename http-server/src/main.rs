@@ -33,7 +33,7 @@ const IP: &str = "0.0.0.0";
 const PORT: &str = "8081";
 const IP_MQTT: &str = "0.0.0.0";
 const PORT_MQTT: &str = "8080";
-const TOPIC_MQTT: &str = "topica";
+const TOPIC_MQTT: &str = "temperature";
 const QOS_MQTT: Qos = Qos::AtMostOnce;
 const SOCKET_WRITE_ERROR_MSG: &str = "Error de escritura en el socket";
 
@@ -50,7 +50,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Me subscribí con exito a: {}", TOPIC_MQTT);
     client.run();
 
-    let body = Arc::new(Mutex::new("    <h1>Current Temperature:</h1>".to_string()));
+    let title = format!("    <h1>Listening to: {}</h1>", TOPIC_MQTT);
+    let body = Arc::new(Mutex::new(title));
     let body_clone = body.clone();
     let join_handler = thread::spawn(move || {
         loop {
