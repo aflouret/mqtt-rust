@@ -25,10 +25,10 @@ mod mqtt_client;
 mod request;
 mod response;
 
-const HTTP_VERSION : &str ="HTTP/1.1";
-const ERROR_HTML_PATH: &str = "src/error.html";
-const HEADER_HTML_PATH: &str = "src/header.html";
-const FOOTER_HTML_PATH: &str = "src/footer.html";
+const ERROR_404_HTML_PATH: &str = "src/htmls/error404.html";
+const ERROR_500_HTML_PATH: &str = "src/htmls/error500.html";
+const HEADER_HTML_PATH: &str = "src/htmls/header.html";
+const FOOTER_HTML_PATH: &str = "src/htmls/footer.html";
 const IP: &str = "0.0.0.0";
 const PORT: &str = "8081";
 const IP_MQTT: &str = "0.0.0.0";
@@ -37,6 +37,7 @@ const TOPIC_MQTT: &str = "temperature";
 const QOS_MQTT: Qos = Qos::AtMostOnce;
 const SOCKET_WRITE_ERROR_MSG: &str = "Error de escritura en el socket";
 
+const HTTP_VERSION : &str ="HTTP/1.1";
 const OK_RETURN_CODE: &str = "200 OK";
 const NOT_FOUND_RETURN_CODE: &str = "404 Not Found";
 const SERVER_ERROR_RETURN_CODE: &str = " 500 Internal Server Error";
@@ -50,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Me subscribí con exito a: {}", TOPIC_MQTT);
     client.run();
 
-    let title = format!("    <h1>Listening to: {}</h1>", TOPIC_MQTT);
+    let title = format!("    <h2>Listening to topic: {}</h2>", TOPIC_MQTT);
     let body = Arc::new(Mutex::new(title));
     let body_clone = body.clone();
     let join_handler = thread::spawn(move || {
@@ -65,17 +66,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut join_handles = vec![];
     for stream in listener.incoming() {
-        let b = body.clone();
-        let mut stream = stream.unwrap();
+        let body_clone = body.clone();
+        let mut stream = stream?;
 
         let join = thread::spawn(move || -> Result<(), std::io::Error> {
-            if let Err(_) = handle_connection(stream.try_clone().unwrap(), b) {
-                let response = Response::new(
-                    SERVER_ERROR_RETURN_CODE,
-                    Some(vec![format!("Content-Length: {}", "hola".len())]),
-                    Some("hola".to_string())
-                );
-                response.write_to(&mut stream)?;
+            if let Err(_) = handle_connection(stream.try_clone()?, body_clone) {
+                let html_in_string = get_html(fs::read_to_string(ERROR_500_HTML_PATH)?)?;
+                create_response(SERVER_ERROR_RETURN_CODE, html_in_string).write_to(&mut stream)?;
             }
             Ok(())
         });
@@ -84,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     join_handler.join().unwrap();
     for handle in join_handles {
-        handle.join().unwrap();
+        handle.join().unwrap()?;        
     }
     Ok(())
 }
@@ -92,25 +89,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<(), Box<dyn std::error::Error>> {
     let request = Request::read_from(&mut stream)?;
     let response;
+    let html_in_string;
     if request.wants_to_access_page() {
-        // Generamos la response con la temperatura que nos llegó del client MQTT
-        //let html_in_string = HEADER.to_string() + &get_body(&body.lock().unwrap().clone()) + FOOTER;
-        let html_in_string = get_main_html(&body.lock().unwrap().clone());
-        response = Response::new(
-            OK_RETURN_CODE,
-            Some(vec![format!("Content-Length: {}", html_in_string.len())]),
-            Some(html_in_string)
-        ); 
+        html_in_string = get_html(body.lock().unwrap().clone().to_owned())?;
+        response = create_response(OK_RETURN_CODE, html_in_string);
     }
     else {
         println!("Request incorrecto. Enviando código de error 404...");
-        let html_in_string = fs::read_to_string(ERROR_HTML_PATH).unwrap();
-        response = Response::new(
-            NOT_FOUND_RETURN_CODE,
-            Some(vec![format!("Content-Length: {}", html_in_string.len())]),
-            Some(html_in_string)
-        );
-    }
+        html_in_string = get_html(fs::read_to_string(ERROR_404_HTML_PATH)?)?;
+        response = create_response(NOT_FOUND_RETURN_CODE, html_in_string);
+    } 
 
     if let Err(_) = response.write_to(&mut stream) {
         return Err(SOCKET_WRITE_ERROR_MSG.into());
@@ -118,14 +106,24 @@ fn handle_connection(mut stream: TcpStream, body: Arc<Mutex<String>>) -> Result<
     Ok(())
 }
 
-fn get_main_html(body: &str) -> String {
-    let html_header = fs::read_to_string(HEADER_HTML_PATH).unwrap();
+// Aux functions
+
+fn get_html(body: String) -> Result<String, std::io::Error> {
+    let html_header = fs::read_to_string(HEADER_HTML_PATH)?;
     let html_body = format!(
         r#"  <body>
     {}
   </body>"#,
         body
     );
-    let html_footer = fs::read_to_string(FOOTER_HTML_PATH).unwrap();
-    html_header + &html_body + &html_footer
+    let html_footer = fs::read_to_string(FOOTER_HTML_PATH)?;
+    Ok(html_header + &html_body + &html_footer)
+}
+
+fn create_response(error_code: &str, html: String) -> Response {
+    Response::new(
+        error_code,
+        Some(vec![format!("Content-Length: {}", html.len())]),
+        Some(html)
+    )
 }

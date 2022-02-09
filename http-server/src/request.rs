@@ -75,13 +75,13 @@ impl Request {
             headers = Some(headers_vec);
         }
 
-        Ok(Request {
-            method: method.to_string(),
-            path: path.to_string(),
-            version: version.to_string(),
+        Ok(Request::new(
+            method,
+            path,
+            version,
             headers,
             body,
-        })
+        ))
     }
 
     // El tipo de request que haría un browser para conectarse a este server y ver los mensajes
